@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Activity, AlertTriangle, CheckCircle2, GitPullRequest, History, RadioTower, Send, ShieldAlert } from "lucide-react";
 import { getDashboardData, Recommendation } from "@/lib/api";
 
@@ -131,6 +132,9 @@ export default async function Home() {
           <div className="flex items-center gap-2 text-sm font-medium text-teal-700">
             <RadioTower size={18} />
             Live Operations Console
+            <Link href="/projects" className="ml-3 border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
+              Projects
+            </Link>
           </div>
         </div>
       </header>

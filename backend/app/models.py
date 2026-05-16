@@ -40,6 +40,95 @@ class WebhookReceipt(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
 
+class GitLabProject(Base):
+    __tablename__ = "gitlab_projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    gitlab_project_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    project_path: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    namespace: Mapped[str] = mapped_column(String(255), default="")
+    web_url: Mapped[str] = mapped_column(String(500), default="")
+    default_branch: Mapped[str] = mapped_column(String(160), default="")
+    visibility: Mapped[str] = mapped_column(String(40), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    last_activity_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    open_merge_requests_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_pipelines_count: Mapped[int] = mapped_column(Integer, default=0)
+    latest_pipeline_id: Mapped[str] = mapped_column(String(80), default="")
+    latest_pipeline_status: Mapped[str] = mapped_column(String(40), default="")
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class ProjectSyncRun(Base):
+    __tablename__ = "project_sync_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    provider: Mapped[str] = mapped_column(String(40), default="gitlab", index=True)
+    status: Mapped[str] = mapped_column(String(40), default="running", index=True)
+    projects_seen: Mapped[int] = mapped_column(Integer, default=0)
+    projects_updated: Mapped[int] = mapped_column(Integer, default=0)
+    merge_requests_seen: Mapped[int] = mapped_column(Integer, default=0)
+    pipelines_seen: Mapped[int] = mapped_column(Integer, default=0)
+    jobs_seen: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class MergeRequestSnapshot(Base):
+    __tablename__ = "merge_request_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    gitlab_project_id: Mapped[str] = mapped_column(String(80), index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    merge_request_iid: Mapped[str] = mapped_column(String(80), index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    state: Mapped[str] = mapped_column(String(60), default="")
+    web_url: Mapped[str] = mapped_column(String(500), default="")
+    author_username: Mapped[str] = mapped_column(String(120), default="")
+    source_branch: Mapped[str] = mapped_column(String(255), default="")
+    target_branch: Mapped[str] = mapped_column(String(255), default="")
+    draft: Mapped[bool] = mapped_column(default=False)
+    created_at_gitlab: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at_gitlab: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class PipelineSnapshot(Base):
+    __tablename__ = "pipeline_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    gitlab_project_id: Mapped[str] = mapped_column(String(80), index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    pipeline_id: Mapped[str] = mapped_column(String(80), index=True)
+    status: Mapped[str] = mapped_column(String(40), default="", index=True)
+    ref: Mapped[str] = mapped_column(String(255), default="")
+    sha: Mapped[str] = mapped_column(String(80), default="")
+    web_url: Mapped[str] = mapped_column(String(500), default="")
+    created_at_gitlab: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at_gitlab: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class JobSnapshot(Base):
+    __tablename__ = "job_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    gitlab_project_id: Mapped[str] = mapped_column(String(80), index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    pipeline_id: Mapped[str] = mapped_column(String(80), index=True)
+    job_id: Mapped[str] = mapped_column(String(80), index=True)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    stage: Mapped[str] = mapped_column(String(120), default="")
+    status: Mapped[str] = mapped_column(String(40), default="", index=True)
+    failure_reason: Mapped[str] = mapped_column(String(255), default="")
+    web_url: Mapped[str] = mapped_column(String(500), default="")
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at_gitlab: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
 class RiskAssessment(Base):
     __tablename__ = "risk_assessments"
 

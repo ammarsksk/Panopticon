@@ -32,6 +32,95 @@ class RiskAssessmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GitLabProjectOut(BaseModel):
+    id: int
+    gitlab_project_id: str
+    project_path: str
+    name: str
+    namespace: str
+    web_url: str
+    default_branch: str
+    visibility: str
+    description: str
+    last_activity_at: datetime | None
+    open_merge_requests_count: int
+    failed_pipelines_count: int
+    latest_pipeline_id: str
+    latest_pipeline_status: str
+    synced_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectSyncRunOut(BaseModel):
+    id: int
+    provider: str
+    status: str
+    projects_seen: int
+    projects_updated: int
+    merge_requests_seen: int
+    pipelines_seen: int
+    jobs_seen: int
+    error: str
+    started_at: datetime
+    finished_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MergeRequestSnapshotOut(BaseModel):
+    id: int
+    gitlab_project_id: str
+    project_path: str
+    merge_request_iid: str
+    title: str
+    state: str
+    web_url: str
+    author_username: str
+    source_branch: str
+    target_branch: str
+    draft: bool
+    created_at_gitlab: datetime | None
+    updated_at_gitlab: datetime | None
+    synced_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PipelineSnapshotOut(BaseModel):
+    id: int
+    gitlab_project_id: str
+    project_path: str
+    pipeline_id: str
+    status: str
+    ref: str
+    sha: str
+    web_url: str
+    created_at_gitlab: datetime | None
+    updated_at_gitlab: datetime | None
+    synced_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobSnapshotOut(BaseModel):
+    id: int
+    gitlab_project_id: str
+    project_path: str
+    pipeline_id: str
+    job_id: str
+    name: str
+    stage: str
+    status: str
+    failure_reason: str
+    web_url: str
+    duration: float | None
+    created_at_gitlab: datetime | None
+    synced_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PipelineInsightOut(BaseModel):
     id: int
     project_path: str
@@ -92,6 +181,15 @@ class RecommendationOut(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectSummaryOut(BaseModel):
+    project: GitLabProjectOut
+    open_merge_requests: list[MergeRequestSnapshotOut]
+    latest_pipelines: list[PipelineSnapshotOut]
+    failed_jobs: list[JobSnapshotOut]
+    active_risks: list[RiskAssessmentOut]
+    latest_recommendations: list[RecommendationOut]
 
 
 class ActionDispatchOut(BaseModel):

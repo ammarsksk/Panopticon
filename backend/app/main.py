@@ -2,7 +2,7 @@ import hashlib
 import json
 import re
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from app.database import get_db, init_db
 from app.event_handlers.gitlab import process_gitlab_event
 from app.integrations.gitlab import verify_gitlab_webhook
 from app.memory.repository import OperationalMemory
+from app.services.gitlab_sync import GitLabProjectSyncService
 
 settings = get_settings()
 
@@ -62,6 +63,108 @@ def _event_uid(request: Request, payload: dict) -> str:
 @app.get("/api/events", response_model=list[schemas.OperationalEventOut])
 def list_events(db: Session = Depends(get_db), limit: int = 50):
     return db.scalars(select(models.OperationalEvent).order_by(desc(models.OperationalEvent.created_at)).limit(limit)).all()
+
+
+@app.post("/api/gitlab/projects/sync", response_model=schemas.ProjectSyncRunOut)
+def sync_gitlab_projects(db: Session = Depends(get_db), limit: int = 50):
+    capped_limit = max(1, min(limit, 100))
+    return GitLabProjectSyncService(db).sync(limit=capped_limit)
+
+
+@app.get("/api/projects", response_model=list[schemas.GitLabProjectOut])
+def list_projects(db: Session = Depends(get_db), limit: int = 100):
+    return db.scalars(select(models.GitLabProject).order_by(desc(models.GitLabProject.last_activity_at)).limit(limit)).all()
+
+
+@app.get("/api/projects/sync-runs", response_model=list[schemas.ProjectSyncRunOut])
+def list_project_sync_runs(db: Session = Depends(get_db), limit: int = 20):
+    return db.scalars(select(models.ProjectSyncRun).order_by(desc(models.ProjectSyncRun.started_at)).limit(limit)).all()
+
+
+@app.get("/api/projects/{project_id}", response_model=schemas.GitLabProjectOut)
+def get_project(project_id: int, db: Session = Depends(get_db)):
+    project = db.get(models.GitLabProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@app.get("/api/projects/{project_id}/merge-requests", response_model=list[schemas.MergeRequestSnapshotOut])
+def list_project_merge_requests(project_id: int, db: Session = Depends(get_db), limit: int = 50):
+    project = _get_project_or_404(db, project_id)
+    return db.scalars(
+        select(models.MergeRequestSnapshot)
+        .where(models.MergeRequestSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .order_by(desc(models.MergeRequestSnapshot.updated_at_gitlab))
+        .limit(limit)
+    ).all()
+
+
+@app.get("/api/projects/{project_id}/pipelines", response_model=list[schemas.PipelineSnapshotOut])
+def list_project_pipelines(project_id: int, db: Session = Depends(get_db), limit: int = 50):
+    project = _get_project_or_404(db, project_id)
+    return db.scalars(
+        select(models.PipelineSnapshot)
+        .where(models.PipelineSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .order_by(desc(models.PipelineSnapshot.updated_at_gitlab))
+        .limit(limit)
+    ).all()
+
+
+@app.get("/api/projects/{project_id}/jobs", response_model=list[schemas.JobSnapshotOut])
+def list_project_jobs(project_id: int, db: Session = Depends(get_db), limit: int = 50):
+    project = _get_project_or_404(db, project_id)
+    return db.scalars(
+        select(models.JobSnapshot)
+        .where(models.JobSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .order_by(desc(models.JobSnapshot.synced_at))
+        .limit(limit)
+    ).all()
+
+
+@app.get("/api/projects/{project_id}/summary", response_model=schemas.ProjectSummaryOut)
+def get_project_summary(project_id: int, db: Session = Depends(get_db)):
+    project = _get_project_or_404(db, project_id)
+    open_merge_requests = db.scalars(
+        select(models.MergeRequestSnapshot)
+        .where(models.MergeRequestSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .where(models.MergeRequestSnapshot.state == "opened")
+        .order_by(desc(models.MergeRequestSnapshot.updated_at_gitlab))
+        .limit(10)
+    ).all()
+    latest_pipelines = db.scalars(
+        select(models.PipelineSnapshot)
+        .where(models.PipelineSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .order_by(desc(models.PipelineSnapshot.updated_at_gitlab))
+        .limit(10)
+    ).all()
+    failed_jobs = db.scalars(
+        select(models.JobSnapshot)
+        .where(models.JobSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .where(models.JobSnapshot.status == "failed")
+        .order_by(desc(models.JobSnapshot.synced_at))
+        .limit(10)
+    ).all()
+    risks = db.scalars(
+        select(models.RiskAssessment)
+        .where(models.RiskAssessment.project_path == project.project_path)
+        .order_by(desc(models.RiskAssessment.created_at))
+        .limit(10)
+    ).all()
+    recommendations = db.scalars(
+        select(models.Recommendation)
+        .where(models.Recommendation.project_path == project.project_path)
+        .order_by(desc(models.Recommendation.created_at))
+        .limit(10)
+    ).all()
+    return {
+        "project": project,
+        "open_merge_requests": open_merge_requests,
+        "latest_pipelines": latest_pipelines,
+        "failed_jobs": failed_jobs,
+        "active_risks": _latest_by([risk for risk in risks if risk.score >= 70], lambda risk: f"{risk.project_path}:{risk.merge_request_iid or risk.deployment_ref}:{risk.score}"),
+        "latest_recommendations": [_shape_recommendation(db, item) for item in _latest_by(recommendations, _recommendation_key)],
+    }
 
 
 @app.get("/api/risks", response_model=list[schemas.RiskAssessmentOut])
@@ -135,6 +238,13 @@ def _latest_by(items, key_for):
         seen.add(key)
         latest.append(item)
     return latest
+
+
+def _get_project_or_404(db: Session, project_id: int) -> models.GitLabProject:
+    project = db.get(models.GitLabProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
 
 
 def _recommendation_key(recommendation: models.Recommendation) -> str:

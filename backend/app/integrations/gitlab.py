@@ -94,6 +94,36 @@ class GitLabClient:
         result = self._request("GET", f"/projects/{self._project_id(project_path)}/deployments", params=params)
         return result if isinstance(result, list) else []
 
+    def list_projects(self, limit: int = 50) -> list[dict]:
+        params = {
+            "membership": "true",
+            "simple": "true",
+            "order_by": "last_activity_at",
+            "sort": "desc",
+            "per_page": min(limit, 100),
+        }
+        result = self._request("GET", "/projects", params=params)
+        return result if isinstance(result, list) else []
+
+    def list_open_merge_requests(self, project_path: str, limit: int = 20) -> list[dict]:
+        params = {
+            "state": "opened",
+            "order_by": "updated_at",
+            "sort": "desc",
+            "per_page": min(limit, 100),
+        }
+        result = self._request("GET", f"/projects/{self._project_id(project_path)}/merge_requests", params=params)
+        return result if isinstance(result, list) else []
+
+    def list_pipelines(self, project_path: str, limit: int = 10) -> list[dict]:
+        params = {
+            "order_by": "updated_at",
+            "sort": "desc",
+            "per_page": min(limit, 100),
+        }
+        result = self._request("GET", f"/projects/{self._project_id(project_path)}/pipelines", params=params)
+        return result if isinstance(result, list) else []
+
     def create_merge_request_note(self, project_path: str, merge_request_iid: str, body: str) -> dict:
         if self.settings.dry_run_actions:
             return {

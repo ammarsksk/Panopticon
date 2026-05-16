@@ -34,6 +34,38 @@ export type DashboardSummary = {
   slack_status: SlackStatus;
 };
 
+export type GitLabProject = {
+  id: number;
+  gitlab_project_id: string;
+  project_path: string;
+  name: string;
+  namespace: string;
+  web_url: string;
+  default_branch: string;
+  visibility: string;
+  description: string;
+  last_activity_at: string | null;
+  open_merge_requests_count: number;
+  failed_pipelines_count: number;
+  latest_pipeline_id: string;
+  latest_pipeline_status: string;
+  synced_at: string;
+};
+
+export type ProjectSyncRun = {
+  id: number;
+  provider: string;
+  status: string;
+  projects_seen: number;
+  projects_updated: number;
+  merge_requests_seen: number;
+  pipelines_seen: number;
+  jobs_seen: number;
+  error: string;
+  started_at: string;
+  finished_at: string | null;
+};
+
 export type Risk = {
   id: number;
   project_path: string;
@@ -96,6 +128,14 @@ async function get<T>(path: string): Promise<T> {
   return response.json();
 }
 
+async function post<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, { method: "POST", cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to post ${path}`);
+  }
+  return response.json();
+}
+
 export async function getDashboardData() {
   const [summary, risks, pipelines, mergeRequests, incidents, memory] = await Promise.all([
     get<DashboardSummary>("/api/dashboard/summary"),
@@ -107,4 +147,17 @@ export async function getDashboardData() {
   ]);
 
   return { summary, risks, pipelines, mergeRequests, incidents, memory };
+}
+
+export async function getProjectsData() {
+  const [projects, syncRuns] = await Promise.all([
+    get<GitLabProject[]>("/api/projects"),
+    get<ProjectSyncRun[]>("/api/projects/sync-runs")
+  ]);
+
+  return { projects, syncRuns };
+}
+
+export async function syncGitLabProjects(limit = 50) {
+  return post<ProjectSyncRun>(`/api/gitlab/projects/sync?limit=${limit}`);
 }
