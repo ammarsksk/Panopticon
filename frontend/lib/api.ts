@@ -13,6 +13,13 @@ export type Recommendation = {
   evidence: string[];
   next_actions: string[];
   origin: "demo" | "gitlab";
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  confidence: number;
+  action_type: string;
+  can_execute: boolean;
+  requires_approval: boolean;
+  approval_state: string;
+  rank_score: number;
   status: string;
   created_at: string;
 };
@@ -66,6 +73,53 @@ export type ProjectSyncRun = {
   finished_at: string | null;
 };
 
+export type MergeRequestSnapshot = {
+  id: number;
+  gitlab_project_id: string;
+  project_path: string;
+  merge_request_iid: string;
+  title: string;
+  state: string;
+  web_url: string;
+  author_username: string;
+  source_branch: string;
+  target_branch: string;
+  draft: boolean;
+  created_at_gitlab: string | null;
+  updated_at_gitlab: string | null;
+  synced_at: string;
+};
+
+export type PipelineSnapshot = {
+  id: number;
+  gitlab_project_id: string;
+  project_path: string;
+  pipeline_id: string;
+  status: string;
+  ref: string;
+  sha: string;
+  web_url: string;
+  created_at_gitlab: string | null;
+  updated_at_gitlab: string | null;
+  synced_at: string;
+};
+
+export type JobSnapshot = {
+  id: number;
+  gitlab_project_id: string;
+  project_path: string;
+  pipeline_id: string;
+  job_id: string;
+  name: string;
+  stage: string;
+  status: string;
+  failure_reason: string;
+  web_url: string;
+  duration: number | null;
+  created_at_gitlab: string | null;
+  synced_at: string;
+};
+
 export type Risk = {
   id: number;
   project_path: string;
@@ -108,6 +162,8 @@ export type Incident = {
   probable_root_cause: string;
   timeline: { time: string; event: string }[];
   recommendations: string[];
+  status?: string;
+  created_at?: string;
 };
 
 export type MemoryRecord = {
@@ -118,6 +174,31 @@ export type MemoryRecord = {
   summary: string;
   evidence: string[];
   remediation: string[];
+  created_at?: string;
+};
+
+export type ActionDispatch = {
+  id: number;
+  recommendation_id: number | null;
+  channel: string;
+  status: string;
+  target: string;
+  request_payload: Record<string, unknown>;
+  response_payload: Record<string, unknown>;
+  error: string;
+  created_at: string;
+};
+
+export type ProjectSummary = {
+  project: GitLabProject;
+  open_merge_requests: MergeRequestSnapshot[];
+  latest_pipelines: PipelineSnapshot[];
+  failed_jobs: JobSnapshot[];
+  active_risks: Risk[];
+  recent_incidents: Incident[];
+  latest_recommendations: Recommendation[];
+  recent_actions: ActionDispatch[];
+  memory_records: MemoryRecord[];
 };
 
 async function get<T>(path: string): Promise<T> {
@@ -160,4 +241,8 @@ export async function getProjectsData() {
 
 export async function syncGitLabProjects(limit = 50) {
   return post<ProjectSyncRun>(`/api/gitlab/projects/sync?limit=${limit}`);
+}
+
+export async function getProjectSummary(projectId: string | number) {
+  return get<ProjectSummary>(`/api/projects/${projectId}/summary`);
 }

@@ -45,6 +45,13 @@ function statusTone(status: string): "neutral" | "good" | "warn" | "critical" {
   return "neutral";
 }
 
+function severityTone(severity: string): "neutral" | "good" | "warn" | "critical" {
+  if (severity === "critical" || severity === "high") return "critical";
+  if (severity === "medium") return "warn";
+  if (severity === "low") return "good";
+  return "neutral";
+}
+
 function uniqueBy<T>(items: T[], keyFor: (item: T) => string): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -60,6 +67,8 @@ function ActionCard({ recommendation }: { recommendation: Recommendation }) {
   const nextActions = recommendation.next_actions ?? [];
   const origin = recommendation.origin ?? "gitlab";
   const status = recommendation.status ?? "queued";
+  const severity = recommendation.severity ?? "info";
+  const confidence = Math.round((recommendation.confidence ?? 0) * 100);
 
   return (
     <article className="flex min-h-[260px] flex-col border border-slate-200 bg-white p-4">
@@ -68,6 +77,7 @@ function ActionCard({ recommendation }: { recommendation: Recommendation }) {
           <div className="flex flex-wrap gap-2">
             <Badge label={recommendation.channel} />
             <Badge label={status} tone={statusTone(status)} />
+            <Badge label={severity} tone={severityTone(severity)} />
             <Badge label={origin} tone={origin === "gitlab" ? "good" : "neutral"} />
           </div>
           <h3 className="text-base font-semibold text-slate-950">{recommendation.title || "Operational recommendation"}</h3>
@@ -76,6 +86,25 @@ function ActionCard({ recommendation }: { recommendation: Recommendation }) {
       </div>
 
       <p className="mt-3 text-sm leading-6 text-slate-700">{recommendation.summary || recommendation.message || "No summary available."}</p>
+
+      <div className="mt-4 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
+        <div className="border border-slate-200 bg-slate-50 p-2">
+          <div className="font-semibold uppercase text-slate-500">Action</div>
+          <div className="mt-1">{recommendation.action_type ?? "dashboard_note"}</div>
+        </div>
+        <div className="border border-slate-200 bg-slate-50 p-2">
+          <div className="font-semibold uppercase text-slate-500">Confidence</div>
+          <div className="mt-1">{confidence}%</div>
+        </div>
+        <div className="border border-slate-200 bg-slate-50 p-2">
+          <div className="font-semibold uppercase text-slate-500">Approval</div>
+          <div className="mt-1">{recommendation.approval_state ?? "not_required"}</div>
+        </div>
+        <div className="border border-slate-200 bg-slate-50 p-2">
+          <div className="font-semibold uppercase text-slate-500">Rank</div>
+          <div className="mt-1">{Math.round(recommendation.rank_score ?? 0)}</div>
+        </div>
+      </div>
 
       {recommendation.gemini_analysis ? (
         <div className="mt-4 border-l-2 border-teal-600 pl-3">
@@ -244,11 +273,18 @@ export default async function Home() {
 
         <Section title="Action Queue" icon={<Send className="text-teal-700" size={20} />}>
           {visibleRecommendations.length ? (
-            <div className="grid gap-3 xl:grid-cols-2">
-              {visibleRecommendations.map((recommendation) => (
-                <ActionCard key={recommendation.id} recommendation={recommendation} />
-              ))}
-            </div>
+            <>
+              <div className="mb-3 flex flex-wrap gap-2">
+                <Badge label="ranked by severity and confidence" />
+                <Badge label={`${visibleRecommendations.filter((item) => item.requires_approval).length} approval required`} tone="warn" />
+                <Badge label={`${visibleRecommendations.filter((item) => item.can_execute).length} executable`} tone="good" />
+              </div>
+              <div className="grid gap-3 xl:grid-cols-2">
+                {visibleRecommendations.map((recommendation) => (
+                  <ActionCard key={recommendation.id} recommendation={recommendation} />
+                ))}
+              </div>
+            </>
           ) : (
             <EmptyState label="No pending or dispatched actions recorded yet." />
           )}

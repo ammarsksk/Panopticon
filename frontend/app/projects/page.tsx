@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle, ArrowLeft, ExternalLink, GitBranch, GitPullRequest, RefreshCw } from "lucide-react";
+import { AlertCircle, ArrowLeft, ExternalLink, GitBranch, GitPullRequest, RefreshCw, Rows3 } from "lucide-react";
 import { getProjectsData, GitLabProject, ProjectSyncRun } from "@/lib/api";
 import { SyncProjectsButton } from "./SyncProjectsButton";
 
@@ -32,10 +32,16 @@ function ProjectCard({ project }: { project: GitLabProject }) {
           <p className="mt-1 text-sm text-slate-600">{project.project_path}</p>
         </div>
         {project.web_url ? (
-          <a href={project.web_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-teal-700">
-            GitLab
-            <ExternalLink size={14} />
-          </a>
+          <div className="flex items-center gap-3">
+            <Link href={`/projects/${project.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-teal-700">
+              Workspace
+              <Rows3 size={14} />
+            </Link>
+            <a href={project.web_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-teal-700">
+              GitLab
+              <ExternalLink size={14} />
+            </a>
+          </div>
         ) : null}
       </div>
 

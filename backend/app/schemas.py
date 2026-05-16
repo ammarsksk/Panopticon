@@ -177,19 +177,17 @@ class RecommendationOut(BaseModel):
     evidence: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
     origin: str = "gitlab"
+    severity: str = "info"
+    confidence: float = 0.0
+    action_type: str = "dashboard_note"
+    can_execute: bool = False
+    requires_approval: bool = False
+    approval_state: str = "not_required"
+    rank_score: float = 0.0
     status: str
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class ProjectSummaryOut(BaseModel):
-    project: GitLabProjectOut
-    open_merge_requests: list[MergeRequestSnapshotOut]
-    latest_pipelines: list[PipelineSnapshotOut]
-    failed_jobs: list[JobSnapshotOut]
-    active_risks: list[RiskAssessmentOut]
-    latest_recommendations: list[RecommendationOut]
 
 
 class ActionDispatchOut(BaseModel):
@@ -217,6 +215,18 @@ class MemoryRecordOut(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectSummaryOut(BaseModel):
+    project: GitLabProjectOut
+    open_merge_requests: list[MergeRequestSnapshotOut]
+    latest_pipelines: list[PipelineSnapshotOut]
+    failed_jobs: list[JobSnapshotOut]
+    active_risks: list[RiskAssessmentOut]
+    recent_incidents: list[IncidentRecordOut]
+    latest_recommendations: list[RecommendationOut]
+    recent_actions: list[ActionDispatchOut]
+    memory_records: list[MemoryRecordOut]
 
 
 class DashboardSummary(BaseModel):

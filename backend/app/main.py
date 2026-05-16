@@ -151,10 +151,31 @@ def get_project_summary(project_id: int, db: Session = Depends(get_db)):
         .order_by(desc(models.RiskAssessment.created_at))
         .limit(10)
     ).all()
+    incidents = db.scalars(
+        select(models.IncidentRecord)
+        .where(models.IncidentRecord.project_path == project.project_path)
+        .order_by(desc(models.IncidentRecord.created_at))
+        .limit(10)
+    ).all()
     recommendations = db.scalars(
         select(models.Recommendation)
         .where(models.Recommendation.project_path == project.project_path)
         .order_by(desc(models.Recommendation.created_at))
+        .limit(10)
+    ).all()
+    recommendation_ids = [item.id for item in recommendations]
+    actions = []
+    if recommendation_ids:
+        actions = db.scalars(
+            select(models.ActionDispatch)
+            .where(models.ActionDispatch.recommendation_id.in_(recommendation_ids))
+            .order_by(desc(models.ActionDispatch.created_at))
+            .limit(10)
+        ).all()
+    memory_records = db.scalars(
+        select(models.MemoryRecord)
+        .where(models.MemoryRecord.project_path == project.project_path)
+        .order_by(desc(models.MemoryRecord.created_at))
         .limit(10)
     ).all()
     return {
@@ -163,7 +184,10 @@ def get_project_summary(project_id: int, db: Session = Depends(get_db)):
         "latest_pipelines": latest_pipelines,
         "failed_jobs": failed_jobs,
         "active_risks": _latest_by([risk for risk in risks if risk.score >= 70], lambda risk: f"{risk.project_path}:{risk.merge_request_iid or risk.deployment_ref}:{risk.score}"),
-        "latest_recommendations": [_shape_recommendation(db, item) for item in _latest_by(recommendations, _recommendation_key)],
+        "recent_incidents": _latest_by(incidents, lambda incident: f"{incident.project_path}:{incident.title}:{incident.probable_root_cause}"),
+        "latest_recommendations": _ranked_recommendations(db, recommendations),
+        "recent_actions": actions,
+        "memory_records": memory_records,
     }
 
 
@@ -194,9 +218,22 @@ def list_memory(db: Session = Depends(get_db), limit: int = 50):
 
 
 @app.get("/api/recommendations", response_model=list[schemas.RecommendationOut])
-def list_recommendations(db: Session = Depends(get_db), limit: int = 50):
-    recommendations = db.scalars(select(models.Recommendation).order_by(desc(models.Recommendation.created_at)).limit(limit * 3)).all()
-    return [_shape_recommendation(db, item) for item in _latest_by(recommendations, _recommendation_key)[:limit]]
+def list_recommendations(
+    db: Session = Depends(get_db),
+    limit: int = 50,
+    severity: str | None = None,
+    status: str | None = None,
+    action_type: str | None = None,
+):
+    recommendations = db.scalars(select(models.Recommendation).order_by(desc(models.Recommendation.created_at)).limit(limit * 4)).all()
+    shaped = _ranked_recommendations(db, recommendations)
+    if severity:
+        shaped = [item for item in shaped if item["severity"] == severity]
+    if status:
+        shaped = [item for item in shaped if item["status"] == status]
+    if action_type:
+        shaped = [item for item in shaped if item["action_type"] == action_type]
+    return shaped[:limit]
 
 
 @app.get("/api/action-dispatches", response_model=list[schemas.ActionDispatchOut])
@@ -217,13 +254,13 @@ def dashboard_summary(db: Session = Depends(get_db)):
     incidents = db.scalars(select(models.IncidentRecord).where(models.IncidentRecord.status == "open").order_by(desc(models.IncidentRecord.created_at)).limit(200)).all()
     recommendations = db.scalars(select(models.Recommendation).order_by(desc(models.Recommendation.created_at)).limit(100)).all()
 
-    visible_recommendations = _latest_by(recommendations, _recommendation_key)[:6]
+    visible_recommendations = _ranked_recommendations(db, recommendations)[:6]
     return {
         "active_risks": len(_latest_by([risk for risk in risks if risk.score >= 70], lambda risk: f"{risk.project_path}:{risk.merge_request_iid or risk.deployment_ref}:{risk.score}")),
         "failed_pipelines": len(_latest_by(pipelines, lambda item: f"{item.project_path}:{item.pipeline_id}:{item.likely_cause}")),
         "blocked_merge_requests": len(_latest_by([mr for mr in merge_requests if mr.bottleneck_level in {"blocked", "stale"}], lambda mr: f"{mr.project_path}:{mr.merge_request_iid}")),
         "open_incidents": len(_latest_by(incidents, lambda incident: f"{incident.project_path}:{incident.title}:{incident.probable_root_cause}")),
-        "latest_recommendations": [_shape_recommendation(db, item) for item in visible_recommendations],
+        "latest_recommendations": visible_recommendations,
         "slack_status": _slack_status(db),
     }
 
@@ -240,6 +277,11 @@ def _latest_by(items, key_for):
     return latest
 
 
+def _ranked_recommendations(db: Session, recommendations: list[models.Recommendation]) -> list[dict]:
+    shaped = [_shape_recommendation(db, item) for item in _latest_by(recommendations, _recommendation_key)]
+    return sorted(shaped, key=lambda item: (item["rank_score"], item["created_at"]), reverse=True)
+
+
 def _get_project_or_404(db: Session, project_id: int) -> models.GitLabProject:
     project = db.get(models.GitLabProject, project_id)
     if not project:
@@ -254,6 +296,12 @@ def _recommendation_key(recommendation: models.Recommendation) -> str:
 def _shape_recommendation(db: Session, recommendation: models.Recommendation) -> dict:
     summary, gemini_analysis = _split_gemini(recommendation.message)
     source = _source_context(db, recommendation)
+    severity = _recommendation_severity(recommendation, source)
+    confidence = _recommendation_confidence(recommendation, source, gemini_analysis)
+    action_type = _recommendation_action_type(recommendation)
+    can_execute = action_type in {"gitlab_comment", "slack_alert"}
+    requires_approval = can_execute
+    rank_score = _recommendation_rank_score(severity, confidence, can_execute, recommendation.status)
     return {
         "id": recommendation.id,
         "project_path": recommendation.project_path,
@@ -267,6 +315,13 @@ def _shape_recommendation(db: Session, recommendation: models.Recommendation) ->
         "evidence": source["evidence"],
         "next_actions": source["next_actions"],
         "origin": "demo" if recommendation.project_path.startswith("demo/") else "gitlab",
+        "severity": severity,
+        "confidence": confidence,
+        "action_type": action_type,
+        "can_execute": can_execute,
+        "requires_approval": requires_approval,
+        "approval_state": _approval_state(recommendation.status, requires_approval),
+        "rank_score": rank_score,
         "status": recommendation.status,
         "created_at": recommendation.created_at,
     }
@@ -304,23 +359,115 @@ def _recommendation_title(recommendation: models.Recommendation) -> str:
 def _source_context(db: Session, recommendation: models.Recommendation) -> dict:
     evidence: list[str] = []
     next_actions: list[str] = []
+    source = None
     source_id = _safe_int(recommendation.source_id)
     if recommendation.source_type == "risk" and source_id:
         risk = db.get(models.RiskAssessment, source_id)
         if risk:
+            source = risk
             evidence = risk.reasons
             next_actions = risk.recommendations
     elif recommendation.source_type == "pipeline" and source_id:
         pipeline = db.get(models.PipelineInsight, source_id)
         if pipeline:
+            source = pipeline
             evidence = pipeline.evidence
             next_actions = pipeline.recommendations
     elif recommendation.source_type == "incident" and source_id:
         incident = db.get(models.IncidentRecord, source_id)
         if incident:
+            source = incident
             evidence = [entry.get("event", "") for entry in incident.timeline if isinstance(entry, dict)]
             next_actions = incident.recommendations
-    return {"evidence": evidence, "next_actions": next_actions}
+    return {"source": source, "evidence": evidence, "next_actions": next_actions}
+
+
+def _recommendation_severity(recommendation: models.Recommendation, source: dict) -> str:
+    source_record = source.get("source")
+    if isinstance(source_record, models.RiskAssessment):
+        if source_record.score >= 85 or source_record.level == "critical":
+            return "critical"
+        if source_record.score >= 70 or source_record.level == "high":
+            return "high"
+        if source_record.score >= 40 or source_record.level == "medium":
+            return "medium"
+        return "low"
+    if isinstance(source_record, models.PipelineInsight):
+        return "high" if source_record.status == "failed" else "medium"
+    if isinstance(source_record, models.IncidentRecord):
+        if source_record.severity in {"critical", "high"}:
+            return source_record.severity
+        return "medium"
+    if recommendation.source_type == "risk":
+        return "high"
+    if recommendation.source_type in {"pipeline", "incident"}:
+        return "medium"
+    return "info"
+
+
+def _recommendation_confidence(recommendation: models.Recommendation, source: dict, gemini_analysis: str) -> float:
+    evidence_count = len(source.get("evidence", []))
+    action_count = len(source.get("next_actions", []))
+    base = 0.5
+    if source.get("source"):
+        base += 0.18
+    if gemini_analysis:
+        base += 0.08
+    if recommendation.status in {"sent", "dry_run", "queued"}:
+        base += 0.04
+    base += min(evidence_count, 4) * 0.05
+    base += min(action_count, 3) * 0.03
+    source_record = source.get("source")
+    if isinstance(source_record, models.RiskAssessment):
+        base += min(source_record.score, 100) / 500
+    return round(min(base, 0.97), 2)
+
+
+def _recommendation_action_type(recommendation: models.Recommendation) -> str:
+    if recommendation.channel == "gitlab_comment":
+        return "gitlab_comment"
+    if recommendation.channel == "slack":
+        return "slack_alert"
+    if recommendation.source_type == "pipeline":
+        return "pipeline_investigation"
+    if recommendation.source_type == "risk":
+        return "review_gate"
+    if recommendation.source_type == "incident":
+        return "incident_followup"
+    return "dashboard_note"
+
+
+def _approval_state(status: str, requires_approval: bool) -> str:
+    if not requires_approval:
+        return "not_required"
+    if status == "sent":
+        return "executed"
+    if status == "failed":
+        return "failed"
+    if status == "dry_run":
+        return "dry_run_ready"
+    if status == "queued":
+        return "pending_approval"
+    return "pending_approval"
+
+
+def _recommendation_rank_score(severity: str, confidence: float, can_execute: bool, status: str) -> float:
+    severity_weight = {
+        "critical": 100,
+        "high": 80,
+        "medium": 55,
+        "low": 30,
+        "info": 10,
+    }.get(severity, 10)
+    status_weight = {
+        "failed": 8,
+        "dry_run": 6,
+        "queued": 4,
+        "pending": 4,
+        "sent": -10,
+    }.get(status, 0)
+    executable_weight = 6 if can_execute else 0
+    return round(severity_weight + (confidence * 20) + executable_weight + status_weight, 2)
 
 
 def _safe_int(value: str) -> int | None:

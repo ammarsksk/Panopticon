@@ -774,47 +774,49 @@ This order is deliberate.
 
 GitLab project sync must come first because every later feature needs real project context. Chat, Slack commands, recommendations, and code-changing actions are weak if the system only knows about isolated webhook events.
 
+## Implementation Status
+
+- Phase 1: GitLab Project Sync is implemented.
+- Phase 2: Project Detail Workspace is implemented.
+- Next recommended phase: Recommendation Engine V2.
+
 ## Immediate Next Implementation Pipeline
 
-The next concrete implementation sprint should be Phase 1.
+The next concrete implementation sprint should be Phase 3.
 
-### Sprint 1 Scope
+### Sprint 3 Scope
 
-Build GitLab project sync and the project list page.
+Build Recommendation Engine V2.
 
 Deliverables:
 
-- database model for projects
-- database model for project sync runs
-- GitLab client methods for project listing
-- backend sync service
-- `/api/gitlab/projects/sync`
-- `/api/projects`
-- `/api/projects/{project_id}`
-- frontend `/projects`
-- dashboard link to Projects
-- tests for sync service and API
+- structured recommendation response model
+- severity and confidence fields
+- action type classification
+- approval requirement flags
+- duplicate suppression improvements
+- recommendation detail UI
+- recommendation filters by severity, status, and action type
+- tests for ranking and project-scoped recommendation output
 
-### Sprint 1 Non-Goals
+### Sprint 3 Non-Goals
 
 Do not build chat yet.
 
 Do not build code-changing actions yet.
 
-Do not replace the current dashboard yet.
+Do not make live external actions automatic.
 
 Do not make live destructive actions.
 
-### Sprint 1 Done Definition
+### Sprint 3 Done Definition
 
-Sprint 1 is done when:
+Sprint 3 is done when:
 
-- the user can click or call sync
-- projects load from real GitLab
-- projects are stored in PostgreSQL
-- `/projects` shows real repositories
-- project cards show open MR and failed pipeline counts where available
-- GitLab token errors are visible and understandable
+- each recommendation has severity, confidence, action type, and approval requirement
+- project workspaces show ranked recommendations
+- duplicate recommendations are collapsed
+- users can distinguish informational recommendations from executable actions
 - backend tests pass
 - frontend build passes
 

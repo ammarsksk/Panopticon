@@ -5,7 +5,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import GitLabProject, JobSnapshot, MergeRequestSnapshot, PipelineSnapshot
+from app.models import ActionDispatch, GitLabProject, IncidentRecord, JobSnapshot, MemoryRecord, MergeRequestSnapshot, PipelineSnapshot, Recommendation, RiskAssessment
 from app.services.gitlab_sync import GitLabProjectSyncService
 
 
@@ -110,6 +110,53 @@ def test_gitlab_project_sync_persists_projects_mrs_pipelines_and_failed_jobs():
 def test_projects_api_returns_synced_project_summary():
     db = _session()
     GitLabProjectSyncService(db, client=FakeGitLabClient()).sync()
+    risk = RiskAssessment(
+        project_path="demo/checkout-service",
+        merge_request_iid="7",
+        deployment_ref="",
+        score=85,
+        level="critical",
+        summary="Deployment risk is critical at 85/100.",
+        reasons=["Auth and deployment files changed."],
+        recommendations=["Require owner review."],
+    )
+    incident = IncidentRecord(
+        project_path="demo/checkout-service",
+        title="Checkout rollback",
+        severity="critical",
+        probable_root_cause="Auth config changed before rollback.",
+        timeline=[{"time": "now", "event": "rollback"}],
+        recommendations=["Compare deployment config."],
+    )
+    recommendation = Recommendation(
+        project_path="demo/checkout-service",
+        source_type="risk",
+        source_id="1",
+        channel="gitlab_comment",
+        message="Deployment risk is critical.\n\nVertex Gemini analysis:\nAuth config changed before rollback.",
+        status="dry_run",
+    )
+    memory = MemoryRecord(
+        project_path="demo/checkout-service",
+        memory_type="incident",
+        signature="checkout-auth-rollback",
+        summary="Auth changes correlated with rollback.",
+        evidence=["Rollback after auth change."],
+        remediation=["Add auth config validation."],
+    )
+    db.add_all([risk, incident, recommendation, memory])
+    db.flush()
+    db.add(
+        ActionDispatch(
+            recommendation_id=recommendation.id,
+            channel="gitlab_comment",
+            status="dry_run",
+            target="demo/checkout-service!7",
+            request_payload={"message": recommendation.message},
+            response_payload={"status": "dry_run"},
+        )
+    )
+    db.commit()
 
     def override_db():
         yield db
@@ -128,3 +175,8 @@ def test_projects_api_returns_synced_project_summary():
     assert summary["open_merge_requests"][0]["merge_request_iid"] == "7"
     assert summary["latest_pipelines"][0]["status"] == "failed"
     assert summary["failed_jobs"][0]["name"] == "test"
+    assert summary["active_risks"][0]["score"] == 85
+    assert summary["recent_incidents"][0]["title"] == "Checkout rollback"
+    assert summary["latest_recommendations"][0]["title"] == "Deployment risk detected"
+    assert summary["recent_actions"][0]["status"] == "dry_run"
+    assert summary["memory_records"][0]["signature"] == "checkout-auth-rollback"
