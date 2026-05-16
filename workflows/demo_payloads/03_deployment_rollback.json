@@ -1,0 +1,15 @@
+{
+  "object_kind": "deployment",
+  "event_name": "deployment",
+  "project": {
+    "path_with_namespace": "demo/checkout-service"
+  },
+  "object_attributes": {
+    "id": 444,
+    "status": "rolled_back",
+    "environment": "production",
+    "ref": "main",
+    "sha": "a82d91"
+  }
+}
+

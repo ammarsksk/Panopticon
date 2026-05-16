@@ -1,0 +1,26 @@
+{
+  "object_kind": "merge_request",
+  "event_name": "merge_request",
+  "project": {
+    "path_with_namespace": "demo/checkout-service"
+  },
+  "object_attributes": {
+    "id": 101,
+    "iid": 17,
+    "action": "open",
+    "title": "Update checkout auth and deployment config",
+    "state": "opened",
+    "source_branch": "risk/checkout-auth",
+    "target_branch": "main",
+    "created_at": "2026-05-07T09:00:00Z",
+    "unresolved_discussions_count": 2,
+    "reviewers": []
+  },
+  "changed_files": [
+    "services/checkout/auth.py",
+    "services/checkout/payment_gateway.py",
+    "deploy/kubernetes/deployment.yaml",
+    "Dockerfile"
+  ]
+}
+

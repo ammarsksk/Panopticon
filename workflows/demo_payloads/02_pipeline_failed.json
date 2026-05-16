@@ -1,0 +1,23 @@
+{
+  "object_kind": "pipeline",
+  "event_name": "pipeline",
+  "project": {
+    "path_with_namespace": "demo/checkout-service"
+  },
+  "object_attributes": {
+    "id": 8801,
+    "status": "failed",
+    "ref": "risk/checkout-auth",
+    "failure_reason": "timeout"
+  },
+  "builds": [
+    {
+      "name": "build-image",
+      "stage": "build",
+      "status": "failed",
+      "failure_reason": "timeout"
+    }
+  ],
+  "build_log": "Docker build timed out while exporting layers. Image size increased after dependency update."
+}
+

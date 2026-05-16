@@ -1,0 +1,73 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local databases and logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+logs/
+
+# Node and Next.js
+node_modules/
+.next/
+.turbo/
+out/
+dist/
+build/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment and secrets
+.env*
+!.env.example
+!.env.*.example
+!backend/.env.example
+!backend/.env.*.example
+!frontend/.env.example
+!frontend/.env.*.example
+*.pem
+*.key
+*service-account*.json
+google-application-credentials*.json
+
+# Local cloud/tool state
+.gcloud/
+.vercel/
+.netlify/
+
+# Local demo/generated repositories
+gitlab-demo-repo/
+
+# Docker/local infrastructure state
+docker-compose.override.yml
+postgres-data/
+pgdata/
+infrastructure/postgres-data/
+infrastructure/pgdata/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
