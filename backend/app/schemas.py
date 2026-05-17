@@ -204,6 +204,84 @@ class ActionDispatchOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AgentActionOut(BaseModel):
+    id: int
+    recommendation_id: int | None
+    project_path: str
+    action_type: str
+    channel: str
+    title: str
+    summary: str
+    status: str
+    requires_approval: bool
+    payload_preview: dict[str, Any]
+    execution_context: dict[str, Any]
+    last_result: dict[str, Any]
+    error: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ActionApprovalOut(BaseModel):
+    id: int
+    agent_action_id: int
+    decision: str
+    actor: str
+    reason: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ActionDecisionIn(BaseModel):
+    actor: str = "local_user"
+    reason: str = ""
+
+
+class AgentActionDetailOut(BaseModel):
+    action: AgentActionOut
+    approvals: list[ActionApprovalOut]
+    dispatches: list[ActionDispatchOut]
+
+
+class ChatThreadOut(BaseModel):
+    id: int
+    project_id: int | None
+    project_path: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatMessageOut(BaseModel):
+    id: int
+    thread_id: int
+    role: str
+    content: str
+    citations: list[dict[str, Any]]
+    prepared_action_ids: list[int]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatRequestIn(BaseModel):
+    message: str
+    project_id: int | None = None
+    thread_id: int | None = None
+
+
+class ChatResponseOut(BaseModel):
+    thread: ChatThreadOut
+    user_message: ChatMessageOut
+    assistant_message: ChatMessageOut
+    prepared_actions: list[AgentActionOut]
+
+
 class MemoryRecordOut(BaseModel):
     id: int
     project_path: str

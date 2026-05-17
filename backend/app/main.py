@@ -13,6 +13,8 @@ from app.database import get_db, init_db
 from app.event_handlers.gitlab import process_gitlab_event
 from app.integrations.gitlab import verify_gitlab_webhook
 from app.memory.repository import OperationalMemory
+from app.services.agent_actions import AgentActionService
+from app.services.chat import ChatService
 from app.services.gitlab_sync import GitLabProjectSyncService
 
 settings = get_settings()
@@ -241,9 +243,105 @@ def list_action_dispatches(db: Session = Depends(get_db), limit: int = 50):
     return db.scalars(select(models.ActionDispatch).order_by(desc(models.ActionDispatch.created_at)).limit(limit)).all()
 
 
+@app.post("/api/actions/propose-from-recommendations", response_model=list[schemas.AgentActionOut])
+def propose_actions_from_recommendations(db: Session = Depends(get_db), limit: int = 50):
+    return AgentActionService(db).propose_from_recommendations(limit=max(1, min(limit, 100)))
+
+
+@app.get("/api/actions", response_model=list[schemas.AgentActionOut])
+def list_agent_actions(db: Session = Depends(get_db), limit: int = 50):
+    return db.scalars(select(models.AgentAction).order_by(desc(models.AgentAction.created_at)).limit(limit)).all()
+
+
+@app.get("/api/actions/{action_id}", response_model=schemas.AgentActionDetailOut)
+def get_agent_action(action_id: int, db: Session = Depends(get_db)):
+    service = AgentActionService(db)
+    action = _agent_action_or_404(service, action_id)
+    approvals = db.scalars(select(models.ActionApproval).where(models.ActionApproval.agent_action_id == action.id).order_by(desc(models.ActionApproval.created_at))).all()
+    dispatches = []
+    if action.recommendation_id:
+        dispatches = db.scalars(
+            select(models.ActionDispatch)
+            .where(models.ActionDispatch.recommendation_id == action.recommendation_id)
+            .order_by(desc(models.ActionDispatch.created_at))
+        ).all()
+    return {"action": action, "approvals": approvals, "dispatches": dispatches}
+
+
+@app.post("/api/actions/{action_id}/approve", response_model=schemas.AgentActionOut)
+def approve_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db)):
+    decision = decision or schemas.ActionDecisionIn()
+    try:
+        return AgentActionService(db).approve(action_id, actor=decision.actor, reason=decision.reason)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Action not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+
+@app.post("/api/actions/{action_id}/reject", response_model=schemas.AgentActionOut)
+def reject_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db)):
+    decision = decision or schemas.ActionDecisionIn()
+    try:
+        return AgentActionService(db).reject(action_id, actor=decision.actor, reason=decision.reason)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Action not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+
+@app.post("/api/actions/{action_id}/execute", response_model=schemas.AgentActionOut)
+def execute_agent_action(action_id: int, db: Session = Depends(get_db)):
+    try:
+        return AgentActionService(db).execute(action_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Action not found") from None
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+
+@app.post("/api/chat", response_model=schemas.ChatResponseOut)
+def create_chat_message(request: schemas.ChatRequestIn, db: Session = Depends(get_db)):
+    if not request.message.strip():
+        raise HTTPException(status_code=422, detail="message is required")
+    if request.project_id and not db.get(models.GitLabProject, request.project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    response = ChatService(db).answer(message=request.message, project_id=request.project_id, thread_id=request.thread_id)
+    return response
+
+
+@app.get("/api/chat/threads", response_model=list[schemas.ChatThreadOut])
+def list_chat_threads(db: Session = Depends(get_db), limit: int = 30):
+    return db.scalars(select(models.ChatThread).order_by(desc(models.ChatThread.updated_at)).limit(limit)).all()
+
+
+@app.get("/api/chat/threads/{thread_id}", response_model=list[schemas.ChatMessageOut])
+def list_chat_messages(thread_id: int, db: Session = Depends(get_db)):
+    thread = db.get(models.ChatThread, thread_id)
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    return db.scalars(select(models.ChatMessage).where(models.ChatMessage.thread_id == thread_id).order_by(models.ChatMessage.created_at)).all()
+
+
 @app.get("/api/integrations/slack")
 def slack_integration_status(db: Session = Depends(get_db)) -> dict:
     return _slack_status(db)
+
+
+@app.get("/api/integrations/ai")
+def ai_integration_status() -> dict:
+    return {
+        "gemini_enabled": settings.gemini_enabled,
+        "provider": "vertex_ai" if settings.google_genai_use_vertexai else "gemini_api",
+        "model": settings.gemini_model,
+        "google_cloud_project_configured": bool(settings.google_cloud_project),
+        "google_cloud_location": settings.google_cloud_location,
+        "chat_mode": "vertex_gemini" if settings.gemini_enabled else "deterministic_fallback",
+        "tool_layer": "internal_panopticon_tools",
+        "mcp_enabled": False,
+    }
 
 
 @app.get("/api/dashboard/summary", response_model=schemas.DashboardSummary)
@@ -287,6 +385,13 @@ def _get_project_or_404(db: Session, project_id: int) -> models.GitLabProject:
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+def _agent_action_or_404(service: AgentActionService, action_id: int) -> models.AgentAction:
+    try:
+        return service.get(action_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Action not found") from None
 
 
 def _recommendation_key(recommendation: models.Recommendation) -> str:

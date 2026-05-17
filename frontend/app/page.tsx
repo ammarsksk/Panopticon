@@ -164,6 +164,12 @@ export default async function Home() {
             <Link href="/projects" className="ml-3 border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
               Projects
             </Link>
+            <Link href="/actions" className="border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
+              Actions
+            </Link>
+            <Link href="/chat" className="border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
+              Chat
+            </Link>
           </div>
         </div>
       </header>

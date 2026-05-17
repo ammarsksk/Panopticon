@@ -486,6 +486,9 @@ The chat UI should include:
 - The assistant answers using stored app data, not generic guesses.
 - Responses cite project records, MRs, pipeline IDs, or incidents.
 - Action requests create proposed actions, not immediate live actions.
+- Chat uses Vertex Gemini for final reasoning when `GEMINI_ENABLED=true`.
+- If Gemini is disabled or unavailable, chat falls back to deterministic grounded answers.
+- The app's internal Panopticon tools are the current tool layer; external MCP servers are a future integration target, not implemented yet.
 
 ## Phase 6: Slack App Upgrade
 
@@ -778,45 +781,48 @@ GitLab project sync must come first because every later feature needs real proje
 
 - Phase 1: GitLab Project Sync is implemented.
 - Phase 2: Project Detail Workspace is implemented.
-- Next recommended phase: Recommendation Engine V2.
+- Phase 3: Recommendation Engine V2 is implemented.
+- Phase 4: Approval And Action System is implemented.
+- Phase 5: Chat Interface is implemented with intent-specific retrieval for pipeline, risk, merge request, incident, memory, and action questions. Chat now sends focused evidence to Vertex Gemini through the backend reasoner when Gemini is enabled, and uses deterministic answers only as fallback. Chat answers should stay focused on the user question and cite only the records used. MCP server integration is still pending.
+- Next recommended phase: Slack App Upgrade.
 
 ## Immediate Next Implementation Pipeline
 
-The next concrete implementation sprint should be Phase 3.
+The next concrete implementation sprint should be Phase 6.
 
-### Sprint 3 Scope
+### Sprint 6 Scope
 
-Build Recommendation Engine V2.
+Build the Slack app upgrade.
 
 Deliverables:
 
-- structured recommendation response model
-- severity and confidence fields
-- action type classification
-- approval requirement flags
-- duplicate suppression improvements
-- recommendation detail UI
-- recommendation filters by severity, status, and action type
-- tests for ranking and project-scoped recommendation output
+- Slack signing secret configuration
+- Slack slash command endpoint
+- Slack interaction endpoint
+- Slack event endpoint
+- command routing for risks, project summaries, and chat questions
+- approval buttons for proposed actions
+- Slack setup status panel updates
+- tests for Slack signature verification and command handling
 
-### Sprint 3 Non-Goals
-
-Do not build chat yet.
+### Sprint 6 Non-Goals
 
 Do not build code-changing actions yet.
+
+Do not make Slack actions live by default.
 
 Do not make live external actions automatic.
 
 Do not make live destructive actions.
 
-### Sprint 3 Done Definition
+### Sprint 6 Done Definition
 
-Sprint 3 is done when:
+Sprint 6 is done when:
 
-- each recommendation has severity, confidence, action type, and approval requirement
-- project workspaces show ranked recommendations
-- duplicate recommendations are collapsed
-- users can distinguish informational recommendations from executable actions
+- Slack slash commands can query Panopticon
+- Slack buttons can approve or reject proposed actions
+- Slack requests are signature-verified
+- Slack responses link back to dashboard/action records
 - backend tests pass
 - frontend build passes
 

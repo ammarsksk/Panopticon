@@ -32,6 +32,17 @@ export type SlackStatus = {
   last_checked_at: string | null;
 };
 
+export type AiIntegrationStatus = {
+  gemini_enabled: boolean;
+  provider: "vertex_ai" | "gemini_api";
+  model: string;
+  google_cloud_project_configured: boolean;
+  google_cloud_location: string;
+  chat_mode: "vertex_gemini" | "deterministic_fallback";
+  tool_layer: string;
+  mcp_enabled: boolean;
+};
+
 export type DashboardSummary = {
   active_risks: number;
   failed_pipelines: number;
@@ -189,6 +200,50 @@ export type ActionDispatch = {
   created_at: string;
 };
 
+export type AgentAction = {
+  id: number;
+  recommendation_id: number | null;
+  project_path: string;
+  action_type: string;
+  channel: string;
+  title: string;
+  summary: string;
+  status: string;
+  requires_approval: boolean;
+  payload_preview: Record<string, unknown>;
+  execution_context: Record<string, unknown>;
+  last_result: Record<string, unknown>;
+  error: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatThread = {
+  id: number;
+  project_id: number | null;
+  project_path: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatMessage = {
+  id: number;
+  thread_id: number;
+  role: "user" | "assistant";
+  content: string;
+  citations: Array<{ type: string; id: number; label: string; summary: string }>;
+  prepared_action_ids: number[];
+  created_at: string;
+};
+
+export type ChatResponse = {
+  thread: ChatThread;
+  user_message: ChatMessage;
+  assistant_message: ChatMessage;
+  prepared_actions: AgentAction[];
+};
+
 export type ProjectSummary = {
   project: GitLabProject;
   open_merge_requests: MergeRequestSnapshot[];
@@ -211,6 +266,19 @@ async function get<T>(path: string): Promise<T> {
 
 async function post<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, { method: "POST", cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to post ${path}`);
+  }
+  return response.json();
+}
+
+async function postJson<T>(path: string, body: Record<string, unknown> = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
   if (!response.ok) {
     throw new Error(`Failed to post ${path}`);
   }
@@ -245,4 +313,44 @@ export async function syncGitLabProjects(limit = 50) {
 
 export async function getProjectSummary(projectId: string | number) {
   return get<ProjectSummary>(`/api/projects/${projectId}/summary`);
+}
+
+export async function getAgentActions() {
+  return get<AgentAction[]>("/api/actions");
+}
+
+export async function proposeAgentActions() {
+  return post<AgentAction[]>("/api/actions/propose-from-recommendations");
+}
+
+export async function approveAgentAction(actionId: number, reason = "") {
+  return postJson<AgentAction>(`/api/actions/${actionId}/approve`, { actor: "local_user", reason });
+}
+
+export async function rejectAgentAction(actionId: number, reason = "") {
+  return postJson<AgentAction>(`/api/actions/${actionId}/reject`, { actor: "local_user", reason });
+}
+
+export async function executeAgentAction(actionId: number) {
+  return post<AgentAction>(`/api/actions/${actionId}/execute`);
+}
+
+export async function getChatThreads() {
+  return get<ChatThread[]>("/api/chat/threads");
+}
+
+export async function getChatMessages(threadId: number) {
+  return get<ChatMessage[]>(`/api/chat/threads/${threadId}`);
+}
+
+export async function getAiIntegrationStatus() {
+  return get<AiIntegrationStatus>("/api/integrations/ai");
+}
+
+export async function sendChatMessage(message: string, projectId?: number, threadId?: number) {
+  return postJson<ChatResponse>("/api/chat", {
+    message,
+    project_id: projectId || null,
+    thread_id: threadId || null
+  });
 }

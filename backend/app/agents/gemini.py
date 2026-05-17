@@ -30,6 +30,28 @@ class GeminiReasoner:
             return self._local_summary(task=task, prompt=prompt, context=context)
         return self._generate_live(task=task, prompt=prompt, context=context)
 
+    def chat_answer(self, *, question: str, intent: str, subject: str, evidence: list[dict], deterministic_draft: str) -> str:
+        """Generate a grounded chat answer with Gemini, falling back to local logic.
+
+        The chat agent remains evidence-first: retrieval and action proposal happen in
+        application code, then Gemini writes the answer using only those records.
+        """
+        if not self.settings.gemini_enabled:
+            return deterministic_draft
+
+        prompt = self._chat_prompt()
+        context = {
+            "question": question,
+            "intent": intent,
+            "subject": subject,
+            "evidence": evidence,
+            "deterministic_draft": deterministic_draft,
+        }
+        generated = self._generate_live(task="chat_answer", prompt=prompt, context=context)
+        if _is_live_failure(generated):
+            return deterministic_draft
+        return generated
+
     def load_prompt(self, task: str) -> str:
         filename = PROMPT_FILES.get(task)
         if not filename:
@@ -95,3 +117,26 @@ class GeminiReasoner:
                 f"Context:\n{context_json}",
             ]
         )
+
+    def _chat_prompt(self) -> str:
+        return "\n".join(
+            [
+                "You are Panopticon, an agentic GitLab operations assistant.",
+                "Answer the developer's question using only the supplied Panopticon evidence.",
+                "If the evidence does not prove something, say what is missing and what to inspect next.",
+                "Do not invent GitLab, Slack, incident, or pipeline facts.",
+                "Be specific, concise, and operational. Prefer concrete next steps over generic advice.",
+                "When an action is proposed, remind the user it still needs approval before execution.",
+                "Return plain text only. Do not use Markdown tables.",
+            ]
+        )
+
+
+def _is_live_failure(text: str) -> bool:
+    lowered = text.lower()
+    return (
+        not text.strip()
+        or "gemini is enabled, but google-genai is not installed" in lowered
+        or "gemini live reasoning failed" in lowered
+        or "gemini returned an empty response" in lowered
+    )
