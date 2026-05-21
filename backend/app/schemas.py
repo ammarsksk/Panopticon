@@ -164,6 +164,71 @@ class IncidentRecordOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ObservabilityEventIn(BaseModel):
+    provider: str = "generic"
+    event_uid: str = ""
+    project_path: str = ""
+    service_name: str = ""
+    environment: str = ""
+    severity: str = "info"
+    signal_type: str = "alert"
+    title: str = ""
+    message: str = ""
+    metric_name: str = ""
+    trace_id: str = ""
+    alert_url: str = ""
+    observed_at: datetime | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ObservabilityEventOut(BaseModel):
+    id: int
+    provider: str
+    event_uid: str
+    project_path: str
+    service_name: str
+    environment: str
+    severity: str
+    signal_type: str
+    title: str
+    message: str
+    metric_name: str
+    trace_id: str
+    alert_url: str
+    payload: dict[str, Any]
+    observed_at: datetime
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class IncidentCorrelationOut(BaseModel):
+    id: int
+    project_path: str
+    title: str
+    severity: str
+    status: str
+    summary: str
+    suspected_cause: str
+    confidence: float
+    timeline: list[dict[str, Any]]
+    related_observability_event_ids: list[int]
+    related_pipeline_ids: list[str]
+    related_risk_ids: list[int]
+    related_incident_ids: list[int]
+    recommendations: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ObservabilityIngestOut(BaseModel):
+    event: ObservabilityEventOut
+    correlation: IncidentCorrelationOut | None
+    deduplicated: bool = False
+
+
 class RecommendationOut(BaseModel):
     id: int
     project_path: str
@@ -244,6 +309,60 @@ class AgentActionDetailOut(BaseModel):
     action: AgentActionOut
     approvals: list[ActionApprovalOut]
     dispatches: list[ActionDispatchOut]
+
+
+class FixPlanCreateIn(BaseModel):
+    project_id: int | None = None
+    project_path: str = ""
+    source_type: str = ""
+    source_id: str = ""
+    problem_statement: str = ""
+    fix_type: str = ""
+
+
+class FixPlanOut(BaseModel):
+    id: int
+    project_id: int | None
+    project_path: str
+    source_type: str
+    source_id: str
+    title: str
+    summary: str
+    status: str
+    requires_approval: bool
+    fix_type: str
+    base_branch: str
+    branch_name: str
+    merge_request_iid: str
+    merge_request_url: str
+    plan_payload: dict[str, Any]
+    last_result: dict[str, Any]
+    error: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FixPlanApprovalOut(BaseModel):
+    id: int
+    fix_plan_id: int
+    decision: str
+    actor: str
+    reason: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FixPlanDecisionIn(BaseModel):
+    actor: str = "local_user"
+    reason: str = ""
+
+
+class FixPlanDetailOut(BaseModel):
+    plan: FixPlanOut
+    approvals: list[FixPlanApprovalOut]
 
 
 class ChatThreadOut(BaseModel):

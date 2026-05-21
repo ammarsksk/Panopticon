@@ -26,6 +26,11 @@ export type Recommendation = {
 
 export type SlackStatus = {
   configured: boolean;
+  webhook_configured: boolean;
+  bot_token_configured: boolean;
+  signing_secret_configured: boolean;
+  default_channel_configured: boolean;
+  default_channel: string;
   mode: "dry_run" | "live";
   last_status: string;
   last_error: string;
@@ -177,6 +182,44 @@ export type Incident = {
   created_at?: string;
 };
 
+export type ObservabilityEvent = {
+  id: number;
+  provider: string;
+  event_uid: string;
+  project_path: string;
+  service_name: string;
+  environment: string;
+  severity: string;
+  signal_type: string;
+  title: string;
+  message: string;
+  metric_name: string;
+  trace_id: string;
+  alert_url: string;
+  payload: Record<string, unknown>;
+  observed_at: string;
+  created_at: string;
+};
+
+export type IncidentCorrelation = {
+  id: number;
+  project_path: string;
+  title: string;
+  severity: string;
+  status: string;
+  summary: string;
+  suspected_cause: string;
+  confidence: number;
+  timeline: Array<{ time: string; kind: string; title: string; detail: string; severity: string; id: number }>;
+  related_observability_event_ids: number[];
+  related_pipeline_ids: string[];
+  related_risk_ids: number[];
+  related_incident_ids: number[];
+  recommendations: string[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type MemoryRecord = {
   id: number;
   project_path: string;
@@ -244,6 +287,33 @@ export type ChatResponse = {
   prepared_actions: AgentAction[];
 };
 
+export type FixPlan = {
+  id: number;
+  project_id: number | null;
+  project_path: string;
+  source_type: string;
+  source_id: string;
+  title: string;
+  summary: string;
+  status: string;
+  requires_approval: boolean;
+  fix_type: string;
+  base_branch: string;
+  branch_name: string;
+  merge_request_iid: string;
+  merge_request_url: string;
+  plan_payload: {
+    files?: Array<{ path: string; commit_action: string; purpose: string; content: string }>;
+    manual_patch_suggestions?: Array<{ path: string; reason: string; suggestion: string }>;
+    review_checklist?: string[];
+    safety?: Record<string, unknown>;
+  };
+  last_result: Record<string, unknown>;
+  error: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ProjectSummary = {
   project: GitLabProject;
   open_merge_requests: MergeRequestSnapshot[];
@@ -296,6 +366,16 @@ export async function getDashboardData() {
   ]);
 
   return { summary, risks, pipelines, mergeRequests, incidents, memory };
+}
+
+export async function getObservabilityData() {
+  const [events, correlations, projects] = await Promise.all([
+    get<ObservabilityEvent[]>("/api/observability/events"),
+    get<IncidentCorrelation[]>("/api/observability/correlations"),
+    get<GitLabProject[]>("/api/projects")
+  ]);
+
+  return { events, correlations, projects };
 }
 
 export async function getProjectsData() {
@@ -353,4 +433,35 @@ export async function sendChatMessage(message: string, projectId?: number, threa
     project_id: projectId || null,
     thread_id: threadId || null
   });
+}
+
+export async function getFixPlans() {
+  return get<FixPlan[]>("/api/fix-plans");
+}
+
+export async function createFixPlan(body: {
+  project_id?: number;
+  project_path?: string;
+  source_type?: string;
+  source_id?: string;
+  problem_statement?: string;
+  fix_type?: string;
+}) {
+  return postJson<FixPlan>("/api/fix-plans", body);
+}
+
+export async function approveFixPlan(planId: number, reason = "") {
+  return postJson<FixPlan>(`/api/fix-plans/${planId}/approve`, { actor: "local_user", reason });
+}
+
+export async function rejectFixPlan(planId: number, reason = "") {
+  return postJson<FixPlan>(`/api/fix-plans/${planId}/reject`, { actor: "local_user", reason });
+}
+
+export async function createFixPlanBranch(planId: number) {
+  return post<FixPlan>(`/api/fix-plans/${planId}/create-branch`);
+}
+
+export async function openFixPlanMergeRequest(planId: number) {
+  return post<FixPlan>(`/api/fix-plans/${planId}/open-merge-request`);
 }

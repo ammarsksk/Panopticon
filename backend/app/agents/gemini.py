@@ -31,7 +31,7 @@ class GeminiReasoner:
         return self._generate_live(task=task, prompt=prompt, context=context)
 
     def chat_answer(self, *, question: str, intent: str, subject: str, evidence: list[dict], deterministic_draft: str) -> str:
-        """Generate a grounded chat answer with Gemini, falling back to local logic.
+        """Generate a grounded chat answer with Gemini.
 
         The chat agent remains evidence-first: retrieval and action proposal happen in
         application code, then Gemini writes the answer using only those records.
@@ -47,9 +47,17 @@ class GeminiReasoner:
             "evidence": evidence,
             "deterministic_draft": deterministic_draft,
         }
-        generated = self._generate_live(task="chat_answer", prompt=prompt, context=context)
+        generated = self._generate_live(task="chat_answer", prompt=prompt, context=context, max_output_tokens=2048)
         if _is_live_failure(generated):
-            return deterministic_draft
+            return _chat_failure_message(generated)
+        if _looks_incomplete(generated):
+            repaired = self._repair_chat_answer(question=question, subject=subject, evidence=evidence, incomplete_answer=generated)
+            if not _is_live_failure(repaired) and not _looks_incomplete(repaired):
+                return repaired
+            return (
+                "Gemini returned an incomplete answer, so I did not show it as the final response. "
+                "Please ask again; the backend will retry the live model call."
+            )
         return generated
 
     def load_prompt(self, task: str) -> str:
@@ -69,7 +77,7 @@ class GeminiReasoner:
             f"with {evidence_count} evidence signals using prompt '{prompt.splitlines()[0]}'."
         )
 
-    def _generate_live(self, *, task: str, prompt: str, context: dict) -> str:
+    def _generate_live(self, *, task: str, prompt: str, context: dict, max_output_tokens: int = 1200) -> str:
         try:
             from google import genai
             from google.genai import types
@@ -84,7 +92,7 @@ class GeminiReasoner:
                 contents=contents,
                 config=types.GenerateContentConfig(
                     temperature=0.2,
-                    max_output_tokens=900,
+                    max_output_tokens=max_output_tokens,
                 ),
             )
             text = getattr(response, "text", "") or ""
@@ -105,6 +113,21 @@ class GeminiReasoner:
 
     def _build_contents(self, *, task: str, prompt: str, context: dict) -> str:
         context_json = json.dumps(context, indent=2, sort_keys=True, default=str)
+        if task in {"chat_answer", "chat_repair"}:
+            return "\n\n".join(
+                [
+                    prompt,
+                    (
+                        "Write a complete operational answer in plain text. "
+                        "Use 3 to 6 short complete sentences. "
+                        "Do not use Markdown tables. "
+                        "Do not end with an unfinished phrase, conjunction, or preposition. "
+                        "End the final sentence with a period."
+                    ),
+                    f"Task: {task}",
+                    f"Context:\n{context_json}",
+                ]
+            )
         return "\n\n".join(
             [
                 prompt,
@@ -131,6 +154,27 @@ class GeminiReasoner:
             ]
         )
 
+    def _repair_chat_answer(self, *, question: str, subject: str, evidence: list[dict], incomplete_answer: str) -> str:
+        prompt = "\n".join(
+            [
+                "You are Panopticon, an agentic GitLab operations assistant.",
+                "The previous model answer was incomplete.",
+                "Rewrite it into a complete answer using only the supplied evidence.",
+                "Do not mention that you are repairing an answer.",
+            ]
+        )
+        return self._generate_live(
+            task="chat_repair",
+            prompt=prompt,
+            context={
+                "question": question,
+                "subject": subject,
+                "evidence": evidence,
+                "incomplete_answer": incomplete_answer,
+            },
+            max_output_tokens=2048,
+        )
+
 
 def _is_live_failure(text: str) -> bool:
     lowered = text.lower()
@@ -139,4 +183,43 @@ def _is_live_failure(text: str) -> bool:
         or "gemini is enabled, but google-genai is not installed" in lowered
         or "gemini live reasoning failed" in lowered
         or "gemini returned an empty response" in lowered
+    )
+
+
+def _looks_incomplete(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return True
+    lower = stripped.lower().rstrip()
+    unfinished_endings = (
+        " on",
+        " in",
+        " at",
+        " with",
+        " from",
+        " to",
+        " for",
+        " by",
+        " of",
+        " and",
+        " or",
+        " because",
+        " due to",
+        " shows",
+        " shows this",
+    )
+    if lower.endswith(unfinished_endings):
+        return True
+    return stripped[-1] not in ".!?"
+
+
+def _chat_failure_message(text: str) -> str:
+    if "404" in text and "not_found" in text.lower():
+        return (
+            "Gemini is configured, but Vertex AI rejected the request because this Google Cloud project does not currently have access to the configured model. "
+            "I did not use the deterministic fallback as the assistant answer. Open the configured model in Vertex AI Model Garden for project panopticon-495816, then ask again."
+        )
+    return (
+        "Gemini is configured, but the live model call failed for this request. "
+        "I did not use the deterministic fallback as the assistant answer. Check the backend Gemini setup and try again."
     )

@@ -144,6 +144,11 @@ export default async function Home() {
   const visibleRecommendations = summary.latest_recommendations;
   const slackStatus = summary.slack_status ?? {
     configured: false,
+    webhook_configured: false,
+    bot_token_configured: false,
+    signing_secret_configured: false,
+    default_channel_configured: false,
+    default_channel: "",
     mode: "dry_run",
     last_status: "unknown",
     last_error: "",
@@ -167,6 +172,12 @@ export default async function Home() {
             <Link href="/actions" className="border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
               Actions
             </Link>
+            <Link href="/fix-plans" className="border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
+              Fix Plans
+            </Link>
+            <Link href="/observability" className="border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
+              Observability
+            </Link>
             <Link href="/chat" className="border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
               Chat
             </Link>
@@ -183,11 +194,29 @@ export default async function Home() {
         </div>
 
         <Section title="Integration Status" icon={<CheckCircle2 className="text-teal-700" size={20} />}>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
             <div className="border border-slate-200 bg-white p-4">
               <div className="text-xs font-semibold uppercase text-slate-500">Slack Webhook</div>
               <div className="mt-2">
-                <Badge label={slackStatus.configured ? "configured" : "missing"} tone={slackStatus.configured ? "good" : "critical"} />
+                <Badge label={slackStatus.webhook_configured ? "configured" : "missing"} tone={slackStatus.webhook_configured ? "good" : "critical"} />
+              </div>
+            </div>
+            <div className="border border-slate-200 bg-white p-4">
+              <div className="text-xs font-semibold uppercase text-slate-500">Slack App</div>
+              <div className="mt-2">
+                <Badge label={slackStatus.signing_secret_configured ? "verified" : "missing secret"} tone={slackStatus.signing_secret_configured ? "good" : "critical"} />
+              </div>
+            </div>
+            <div className="border border-slate-200 bg-white p-4">
+              <div className="text-xs font-semibold uppercase text-slate-500">Bot Token</div>
+              <div className="mt-2">
+                <Badge label={slackStatus.bot_token_configured ? "configured" : "missing"} tone={slackStatus.bot_token_configured ? "good" : "warn"} />
+              </div>
+            </div>
+            <div className="border border-slate-200 bg-white p-4">
+              <div className="text-xs font-semibold uppercase text-slate-500">Default Channel</div>
+              <div className="mt-2">
+                <Badge label={slackStatus.default_channel_configured ? slackStatus.default_channel : "missing"} tone={slackStatus.default_channel_configured ? "good" : "warn"} />
               </div>
             </div>
             <div className="border border-slate-200 bg-white p-4">

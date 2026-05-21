@@ -2,7 +2,7 @@ import hashlib
 import json
 import re
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -12,10 +12,15 @@ from app.config import get_settings
 from app.database import get_db, init_db
 from app.event_handlers.gitlab import process_gitlab_event
 from app.integrations.gitlab import verify_gitlab_webhook
+from app.integrations.slack import parse_slack_form, verified_slack_body
 from app.memory.repository import OperationalMemory
 from app.services.agent_actions import AgentActionService
+from app.services.agent_tools import AgentToolService, mcp_text_result
 from app.services.chat import ChatService
+from app.services.fix_plans import FixPlanService
 from app.services.gitlab_sync import GitLabProjectSyncService
+from app.services.observability import ObservabilityService
+from app.services.slack_app import SlackAppService, parse_interaction_payload
 
 settings = get_settings()
 
@@ -214,6 +219,31 @@ def list_incidents(db: Session = Depends(get_db), limit: int = 50):
     return db.scalars(select(models.IncidentRecord).order_by(desc(models.IncidentRecord.created_at)).limit(limit)).all()
 
 
+@app.post("/api/observability/events", response_model=schemas.ObservabilityIngestOut)
+def ingest_observability_event(request: schemas.ObservabilityEventIn, db: Session = Depends(get_db)):
+    raw = request.model_dump(exclude_none=True)
+    provider = raw.pop("provider", "generic") or "generic"
+    event, correlation, deduplicated = ObservabilityService(db).ingest(raw, provider=provider)
+    return {"event": event, "correlation": correlation, "deduplicated": deduplicated}
+
+
+@app.post("/webhooks/observability/{provider}", response_model=schemas.ObservabilityIngestOut)
+async def observability_webhook(provider: str, request: Request, db: Session = Depends(get_db)):
+    payload = await _json_or_empty(request)
+    event, correlation, deduplicated = ObservabilityService(db).ingest(payload, provider=provider)
+    return {"event": event, "correlation": correlation, "deduplicated": deduplicated}
+
+
+@app.get("/api/observability/events", response_model=list[schemas.ObservabilityEventOut])
+def list_observability_events(db: Session = Depends(get_db), limit: int = 50, project_path: str = ""):
+    return ObservabilityService(db).list_events(project_path=project_path, limit=max(1, min(limit, 100)))
+
+
+@app.get("/api/observability/correlations", response_model=list[schemas.IncidentCorrelationOut])
+def list_incident_correlations(db: Session = Depends(get_db), limit: int = 50, project_path: str = ""):
+    return ObservabilityService(db).list_correlations(project_path=project_path, limit=max(1, min(limit, 100)))
+
+
 @app.get("/api/memory", response_model=list[schemas.MemoryRecordOut])
 def list_memory(db: Session = Depends(get_db), limit: int = 50):
     return db.scalars(select(models.MemoryRecord).order_by(desc(models.MemoryRecord.created_at)).limit(limit)).all()
@@ -302,6 +332,84 @@ def execute_agent_action(action_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail=str(exc)) from None
 
 
+@app.post("/api/fix-plans", response_model=schemas.FixPlanOut)
+def create_fix_plan(request: schemas.FixPlanCreateIn, db: Session = Depends(get_db)):
+    try:
+        return FixPlanService(db).create(
+            project_id=request.project_id,
+            project_path=request.project_path,
+            source_type=request.source_type,
+            source_id=request.source_id,
+            problem_statement=request.problem_statement,
+            fix_type=request.fix_type,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@app.get("/api/fix-plans", response_model=list[schemas.FixPlanOut])
+def list_fix_plans(db: Session = Depends(get_db), limit: int = 50):
+    return FixPlanService(db).list(limit=max(1, min(limit, 100)))
+
+
+@app.get("/api/fix-plans/{plan_id}", response_model=schemas.FixPlanDetailOut)
+def get_fix_plan(plan_id: int, db: Session = Depends(get_db)):
+    service = FixPlanService(db)
+    try:
+        plan = service.get(plan_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Fix plan not found") from None
+    return {"plan": plan, "approvals": service.approvals(plan.id)}
+
+
+@app.post("/api/fix-plans/{plan_id}/approve", response_model=schemas.FixPlanOut)
+def approve_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db)):
+    decision = decision or schemas.FixPlanDecisionIn()
+    try:
+        return FixPlanService(db).approve(plan_id, actor=decision.actor, reason=decision.reason)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Fix plan not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+
+@app.post("/api/fix-plans/{plan_id}/reject", response_model=schemas.FixPlanOut)
+def reject_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db)):
+    decision = decision or schemas.FixPlanDecisionIn()
+    try:
+        return FixPlanService(db).reject(plan_id, actor=decision.actor, reason=decision.reason)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Fix plan not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+
+@app.post("/api/fix-plans/{plan_id}/create-branch", response_model=schemas.FixPlanOut)
+def create_fix_plan_branch(plan_id: int, db: Session = Depends(get_db)):
+    try:
+        return FixPlanService(db).create_branch(plan_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Fix plan not found") from None
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@app.post("/api/fix-plans/{plan_id}/open-merge-request", response_model=schemas.FixPlanOut)
+def open_fix_plan_merge_request(plan_id: int, db: Session = Depends(get_db)):
+    try:
+        return FixPlanService(db).open_merge_request(plan_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Fix plan not found") from None
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
 @app.post("/api/chat", response_model=schemas.ChatResponseOut)
 def create_chat_message(request: schemas.ChatRequestIn, db: Session = Depends(get_db)):
     if not request.message.strip():
@@ -330,6 +438,28 @@ def slack_integration_status(db: Session = Depends(get_db)) -> dict:
     return _slack_status(db)
 
 
+@app.post("/slack/commands")
+async def slack_commands(request: Request, db: Session = Depends(get_db)) -> dict:
+    body = await verified_slack_body(request)
+    form = parse_slack_form(body)
+    return SlackAppService(db).command(form)
+
+
+@app.post("/slack/interactions")
+async def slack_interactions(request: Request, db: Session = Depends(get_db)) -> dict:
+    body = await verified_slack_body(request)
+    form = parse_slack_form(body)
+    payload = parse_interaction_payload(form)
+    return SlackAppService(db).interaction(payload)
+
+
+@app.post("/slack/events")
+async def slack_events(request: Request, db: Session = Depends(get_db)) -> dict:
+    body = await verified_slack_body(request)
+    payload = json.loads(body.decode("utf-8") or "{}")
+    return SlackAppService(db).event(payload)
+
+
 @app.get("/api/integrations/ai")
 def ai_integration_status() -> dict:
     return {
@@ -339,9 +469,34 @@ def ai_integration_status() -> dict:
         "google_cloud_project_configured": bool(settings.google_cloud_project),
         "google_cloud_location": settings.google_cloud_location,
         "chat_mode": "vertex_gemini" if settings.gemini_enabled else "deterministic_fallback",
-        "tool_layer": "internal_panopticon_tools",
-        "mcp_enabled": False,
+        "tool_layer": "mcp_compatible_panopticon_tools",
+        "mcp_enabled": True,
     }
+
+
+@app.get("/api/agent/tools")
+def list_agent_tools(db: Session = Depends(get_db)) -> dict:
+    return {"tools": AgentToolService(db).list_tools()}
+
+
+@app.post("/api/agent/tools/{tool_name}/invoke")
+async def invoke_agent_tool(tool_name: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    arguments = await _json_or_empty(request)
+    try:
+        return AgentToolService(db).call_tool(tool_name, arguments)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+
+@app.post("/mcp")
+async def mcp_json_rpc(request: Request, db: Session = Depends(get_db)):
+    payload = await request.json()
+    if isinstance(payload, list):
+        return [_mcp_response(item, db) for item in payload]
+    response = _mcp_response(payload, db)
+    if response is None:
+        return Response(status_code=202)
+    return response
 
 
 @app.get("/api/dashboard/summary", response_model=schemas.DashboardSummary)
@@ -373,6 +528,42 @@ def _latest_by(items, key_for):
         seen.add(key)
         latest.append(item)
     return latest
+
+
+async def _json_or_empty(request: Request) -> dict:
+    try:
+        body = await request.json()
+    except Exception:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _mcp_response(payload: dict, db: Session) -> dict | None:
+    request_id = payload.get("id")
+    method = payload.get("method")
+    params = payload.get("params") or {}
+    service = AgentToolService(db)
+
+    if request_id is None and str(method).startswith("notifications/"):
+        return None
+    try:
+        if method == "initialize":
+            result = {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "panopticon", "version": "0.1.0"},
+            }
+        elif method == "tools/list":
+            result = {"tools": service.list_mcp_tools()}
+        elif method == "tools/call":
+            result = mcp_text_result(service.call_tool(str(params.get("name") or ""), params.get("arguments") or {}))
+        else:
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method not found: {method}"}}
+        return {"jsonrpc": "2.0", "id": request_id, "result": result}
+    except LookupError as exc:
+        return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32004, "message": str(exc)}}
+    except Exception as exc:
+        return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32603, "message": str(exc)}}
 
 
 def _ranked_recommendations(db: Session, recommendations: list[models.Recommendation]) -> list[dict]:
@@ -585,7 +776,12 @@ def _safe_int(value: str) -> int | None:
 def _slack_status(db: Session) -> dict:
     last_dispatch = db.scalars(select(models.ActionDispatch).where(models.ActionDispatch.channel == "slack").order_by(desc(models.ActionDispatch.created_at)).limit(1)).first()
     return {
-        "configured": bool(settings.slack_webhook_url),
+        "configured": bool(settings.slack_webhook_url or settings.slack_bot_token or settings.slack_signing_secret),
+        "webhook_configured": bool(settings.slack_webhook_url),
+        "bot_token_configured": bool(settings.slack_bot_token),
+        "signing_secret_configured": bool(settings.slack_signing_secret),
+        "default_channel_configured": bool(settings.slack_default_channel),
+        "default_channel": settings.slack_default_channel,
         "mode": "dry_run" if settings.dry_run_actions else "live",
         "last_status": last_dispatch.status if last_dispatch else "none",
         "last_error": last_dispatch.error if last_dispatch else "",

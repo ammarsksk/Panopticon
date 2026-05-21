@@ -1,20 +1,20 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app import models
 from app.agents.gemini import GeminiReasoner
-from app.services.agent_actions import AgentActionService
+from app.services.agent_tools import AgentToolService
 
 
 class ChatService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.reasoner = GeminiReasoner()
+        self.tools = AgentToolService(db)
 
     def answer(self, *, message: str, project_id: int | None = None, thread_id: int | None = None) -> dict:
-        project = self._project(project_id)
+        project = self._project(project_id) or self.tools.infer_project(message)
         thread = self._thread(message=message, project=project, thread_id=thread_id)
         user_message = self._add_message(thread, role="user", content=message)
 
@@ -95,44 +95,21 @@ class ChatService:
         return message
 
     def _context(self, project: models.GitLabProject | None) -> dict:
-        project_path = project.project_path if project else None
-        return {
-            "project": project,
-            "merge_requests": self.db.scalars(self._project_query(models.MergeRequestSnapshot, project_path).order_by(desc(models.MergeRequestSnapshot.updated_at_gitlab)).limit(5)).all(),
-            "pipelines": self.db.scalars(self._project_query(models.PipelineSnapshot, project_path).order_by(desc(models.PipelineSnapshot.updated_at_gitlab)).limit(5)).all(),
-            "pipeline_insights": self.db.scalars(self._project_query(models.PipelineInsight, project_path).order_by(desc(models.PipelineInsight.created_at)).limit(5)).all(),
-            "failed_jobs": self.db.scalars(self._project_query(models.JobSnapshot, project_path).where(models.JobSnapshot.status == "failed").order_by(desc(models.JobSnapshot.synced_at)).limit(5)).all(),
-            "risks": self.db.scalars(self._project_query(models.RiskAssessment, project_path).order_by(desc(models.RiskAssessment.created_at)).limit(5)).all(),
-            "incidents": self.db.scalars(self._project_query(models.IncidentRecord, project_path).order_by(desc(models.IncidentRecord.created_at)).limit(5)).all(),
-            "recommendations": self.db.scalars(self._project_query(models.Recommendation, project_path).order_by(desc(models.Recommendation.created_at)).limit(5)).all(),
-            "actions": self.db.scalars(self._project_query(models.AgentAction, project_path).order_by(desc(models.AgentAction.updated_at)).limit(5)).all(),
-            "memory": self.db.scalars(self._project_query(models.MemoryRecord, project_path).order_by(desc(models.MemoryRecord.created_at)).limit(5)).all(),
-        }
-
-    def _project_query(self, model, project_path: str | None):
-        stmt = select(model)
-        if project_path and hasattr(model, "project_path"):
-            stmt = stmt.where(model.project_path == project_path)
-        return stmt
+        return self.tools.chat_context(project)
 
     def _prepare_actions_if_requested(self, message: str, project: models.GitLabProject | None) -> list[models.AgentAction]:
         lowered = message.lower()
         if not any(word in lowered for word in ["prepare", "propose", "create action", "draft action", "make action"]):
             return []
 
-        stmt = select(models.Recommendation).where(models.Recommendation.channel.in_(["gitlab_comment", "slack"]))
-        if project:
-            stmt = stmt.where(models.Recommendation.project_path == project.project_path)
-        recommendations = self.db.scalars(stmt.order_by(desc(models.Recommendation.created_at)).limit(10)).all()
-        service = AgentActionService(self.db)
-        actions = [service.propose(recommendation) for recommendation in recommendations]
-        self.db.flush()
-        return actions
+        return self.tools.prepare_action_records(project=project, limit=10)
 
     def _compose_answer(self, intent: str, question: str, project: models.GitLabProject | None, context: dict, prepared_actions: list[models.AgentAction]) -> str:
         subject = project.project_path if project else "all synced projects"
         if intent == "pipeline_failure":
             return self._pipeline_answer(subject, context, prepared_actions)
+        if intent == "priority":
+            return self._priority_answer(subject, context, prepared_actions)
         if intent == "risk":
             return self._risk_answer(subject, context, prepared_actions)
         if intent == "merge_request":
@@ -228,6 +205,31 @@ class ChatService:
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
 
+    def _priority_answer(self, subject: str, context: dict, prepared_actions: list[models.AgentAction]) -> str:
+        risks = sorted(context["risks"], key=lambda risk: risk.score, reverse=True)
+        failures = [item for item in context["pipeline_insights"] if item.status == "failed"]
+        incidents = [item for item in context["incidents"] if item.status == "open"]
+        actions = [item for item in context["actions"] if item.status == "pending_approval"]
+        parts = [f"Priority triage for {subject}:"]
+        if risks:
+            top = risks[0]
+            parts.append(f"- First risk: {top.project_path} at {top.score}/100 {top.level}. {top.summary}")
+        if failures:
+            failure = failures[0]
+            parts.append(f"- First pipeline failure: {failure.project_path} pipeline #{failure.pipeline_id}. Likely cause: {failure.likely_cause}")
+        if incidents:
+            incident = incidents[0]
+            parts.append(f"- Open incident: {incident.project_path} {incident.title}. Root cause: {incident.probable_root_cause}")
+        if actions:
+            action = actions[0]
+            parts.append(f"- Pending approval: action #{action.id} {action.title} for {action.project_path}.")
+        if not any([risks, failures, incidents, actions]):
+            parts.append("- No active risks, failures, incidents, or pending approvals are stored for this scope.")
+        else:
+            parts.append("- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.")
+        self._append_prepared(parts, prepared_actions)
+        return "\n".join(parts)
+
     def _risk_answer(self, subject: str, context: dict, prepared_actions: list[models.AgentAction]) -> str:
         risks = context["risks"]
         recommendations = context["recommendations"]
@@ -308,6 +310,7 @@ class ChatService:
     def _citations(self, intent: str, context: dict, prepared_actions: list[models.AgentAction]) -> list[dict]:
         intent_sources = {
             "pipeline_failure": ["pipeline_insights", "failed_jobs", "pipelines"],
+            "priority": ["risks", "pipeline_insights", "failed_jobs", "incidents", "actions"],
             "risk": ["risks", "recommendations"],
             "merge_request": ["merge_requests", "risks"],
             "incident": ["incidents", "memory", "recommendations"],
@@ -512,9 +515,16 @@ def _now():
 
 def _classify_intent(message: str) -> str:
     text = message.lower()
-    if any(term in text for term in ["pipeline", "ci", "job", "build", "test failed", "timeout", "fail"]):
+    has_priority_word = any(term in text for term in ["which", "first", "worst", "highest", "top", "prioritize", "priority", "look at"])
+    has_risk_word = any(term in text for term in ["risk", "risky", "danger", "safe", "unsafe", "deployment"])
+    has_failure_word = any(term in text for term in ["pipeline", "ci", "job", "build", "test failed", "timeout", "fail", "failure"])
+    if has_priority_word and (has_risk_word or has_failure_word):
+        return "priority"
+    if has_risk_word and has_failure_word:
+        return "priority"
+    if has_failure_word:
         return "pipeline_failure"
-    if any(term in text for term in ["risk", "risky", "danger", "safe", "unsafe", "deployment"]):
+    if has_risk_word:
         return "risk"
     if any(term in text for term in ["merge request", "mr ", "review", "branch"]):
         return "merge_request"

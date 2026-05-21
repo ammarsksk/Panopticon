@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from dataclasses import replace
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -7,6 +8,7 @@ from app.agents.gemini import GeminiReasoner
 from app.database import Base, get_db
 from app.main import app
 from app.models import ChatMessage, ChatThread, GitLabProject, MergeRequestSnapshot, PipelineInsight, PipelineSnapshot, Recommendation, RiskAssessment
+from app.scripts.seed_demo import seed_rich_demo
 
 
 def _session():
@@ -84,7 +86,16 @@ def _seed_project_context(db):
     return project
 
 
-def test_chat_answers_from_project_context_and_cites_records():
+def _use_deterministic_chat(monkeypatch):
+    monkeypatch.setattr(
+        GeminiReasoner,
+        "chat_answer",
+        lambda self, *, question, intent, subject, evidence, deterministic_draft: deterministic_draft,
+    )
+
+
+def test_chat_answers_from_project_context_and_cites_records(monkeypatch):
+    _use_deterministic_chat(monkeypatch)
     db = _session()
     project = _seed_project_context(db)
 
@@ -113,7 +124,8 @@ def test_chat_answers_from_project_context_and_cites_records():
     assert db.query(ChatMessage).count() == 2
 
 
-def test_chat_routes_pipeline_questions_to_pipeline_answer():
+def test_chat_routes_pipeline_questions_to_pipeline_answer(monkeypatch):
+    _use_deterministic_chat(monkeypatch)
     db = _session()
     project = _seed_project_context(db)
 
@@ -141,7 +153,8 @@ def test_chat_routes_pipeline_questions_to_pipeline_answer():
     assert {citation["type"] for citation in citations} <= {"pipeline_insights", "failed_jobs", "pipelines"}
 
 
-def test_chat_routes_risk_questions_to_risk_answer():
+def test_chat_routes_risk_questions_to_risk_answer(monkeypatch):
+    _use_deterministic_chat(monkeypatch)
     db = _session()
     project = _seed_project_context(db)
 
@@ -167,6 +180,61 @@ def test_chat_routes_risk_questions_to_risk_answer():
     assert "Deployment risk is critical" in answer
     assert "Pipeline state" not in answer
     assert {citation["type"] for citation in citations} <= {"risks", "recommendations"}
+
+
+def test_chat_prioritizes_risks_and_failures_across_many_projects(monkeypatch):
+    _use_deterministic_chat(monkeypatch)
+    db = _session()
+    seed_rich_demo(db)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={"message": "Which risks or failures should I look at first?"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    payload = response.json()
+    answer = payload["assistant_message"]["content"]
+    citation_types = {citation["type"] for citation in payload["assistant_message"]["citations"]}
+    assert answer.startswith("Priority triage for all synced projects")
+    assert "demo/checkout-service" in answer
+    assert "First pipeline failure" in answer
+    assert {"risks", "pipeline_insights"} <= citation_types
+
+
+def test_chat_infers_project_from_question_text(monkeypatch):
+    _use_deterministic_chat(monkeypatch)
+    db = _session()
+    seed_rich_demo(db)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={"message": "What happened with billing worker pipeline?"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["thread"]["project_path"] == "demo/billing-worker"
+    assert "demo/billing-worker" in payload["assistant_message"]["content"]
+    assert "payment gateway contract mismatch" in payload["assistant_message"]["content"]
 
 
 def test_chat_invokes_gemini_reasoner_with_focused_evidence(monkeypatch):
@@ -207,7 +275,88 @@ def test_chat_invokes_gemini_reasoner_with_focused_evidence(monkeypatch):
     assert {item["type"] for item in captured["evidence"]} <= {"pipeline_insights", "failed_jobs", "pipelines"}
 
 
-def test_chat_can_prepare_actions_without_executing_them():
+def test_chat_does_not_show_deterministic_answer_when_live_gemini_fails(monkeypatch):
+    db = _session()
+    project = _seed_project_context(db)
+
+    original_init = GeminiReasoner.__init__
+
+    def fake_init(self):
+        original_init(self)
+        self.settings = replace(self.settings, gemini_enabled=True)
+
+    monkeypatch.setattr(GeminiReasoner, "__init__", fake_init)
+    monkeypatch.setattr(
+        GeminiReasoner,
+        "_generate_live",
+        lambda self, *, task, prompt, context, max_output_tokens=1200: "Gemini live reasoning failed: 404 NOT_FOUND. Publisher Model gemini-2.5-pro was not found.",
+    )
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={"project_id": project.id, "message": "why did the pipeline fail?"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    answer = response.json()["assistant_message"]["content"]
+    assert "Gemini is configured" in answer
+    assert "deterministic fallback" in answer
+    assert "Pipeline analysis" not in answer
+    assert "test job timed out" not in answer
+
+
+def test_chat_repairs_incomplete_live_gemini_answer(monkeypatch):
+    db = _session()
+    project = _seed_project_context(db)
+
+    original_init = GeminiReasoner.__init__
+    generated = [
+        "The latest pipeline failed, but the specific cause is not proven. Evidence shows it failed on",
+        "The latest pipeline failed, but the specific cause is not proven from the stored records. The available evidence shows the pipeline failed, but no parsed failed job or pipeline insight is stored yet. Inspect the failed GitLab job log for the first failing command or timeout boundary.",
+    ]
+
+    def fake_init(self):
+        original_init(self)
+        self.settings = replace(self.settings, gemini_enabled=True)
+
+    def fake_generate_live(self, *, task, prompt, context, max_output_tokens=1200):
+        return generated.pop(0)
+
+    monkeypatch.setattr(GeminiReasoner, "__init__", fake_init)
+    monkeypatch.setattr(GeminiReasoner, "_generate_live", fake_generate_live)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={"project_id": project.id, "message": "Which risks or failures should I look at first?"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    answer = response.json()["assistant_message"]["content"]
+    assert "failed on" not in answer
+    assert answer.endswith(".")
+    assert "Inspect the failed GitLab job log" in answer
+
+
+def test_chat_can_prepare_actions_without_executing_them(monkeypatch):
+    _use_deterministic_chat(monkeypatch)
     db = _session()
     project = _seed_project_context(db)
 

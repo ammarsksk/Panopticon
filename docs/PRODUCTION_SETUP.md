@@ -170,7 +170,7 @@ gcloud.cmd run deploy panopticon-backend `
   --region us-central1 `
   --service-account panopticon-runtime@panopticon-495816.iam.gserviceaccount.com `
   --add-cloudsql-instances panopticon-495816:us-central1:panopticon-postgres `
-  --set-env-vars APP_ENV=production,ALLOWED_ORIGINS=https://YOUR_FRONTEND_DOMAIN,GEMINI_ENABLED=true,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=panopticon-495816,GOOGLE_CLOUD_LOCATION=us-central1,GEMINI_MODEL=gemini-2.5-flash,DRY_RUN_ACTIONS=true,DISPATCH_ACTIONS=true `
+  --set-env-vars APP_ENV=production,ALLOWED_ORIGINS=https://YOUR_FRONTEND_DOMAIN,GEMINI_ENABLED=true,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=panopticon-495816,GOOGLE_CLOUD_LOCATION=global,GEMINI_MODEL=gemini-2.5-pro,DRY_RUN_ACTIONS=true,DISPATCH_ACTIONS=true `
   --set-secrets DATABASE_URL=panopticon-database-url:latest,GITLAB_TOKEN=panopticon-gitlab-token:latest,GITLAB_WEBHOOK_SECRET=panopticon-gitlab-webhook-secret:latest,SLACK_WEBHOOK_URL=panopticon-slack-webhook-url:latest `
   --allow-unauthenticated `
   --project panopticon-495816
@@ -237,6 +237,31 @@ Enable triggers:
 ## Slack Setup
 
 Create a Slack app, enable Incoming Webhooks, add a webhook for the target channel, and store the generated URL in Secret Manager as `panopticon-slack-webhook-url`.
+
+Configure the Slack app request URLs:
+
+```text
+Slash command: https://YOUR_BACKEND_DOMAIN/slack/commands
+Interactivity: https://YOUR_BACKEND_DOMAIN/slack/interactions
+Events:        https://YOUR_BACKEND_DOMAIN/slack/events
+```
+
+Store these backend environment values:
+
+```text
+SLACK_SIGNING_SECRET=<Slack app signing secret>
+SLACK_BOT_TOKEN=<xoxb-token if bot posting is enabled>
+SLACK_DEFAULT_CHANNEL=#panopticon
+```
+
+The first supported slash commands are:
+
+```text
+/panopticon risks
+/panopticon project checkout-service
+/panopticon ask why did the latest pipeline fail
+/panopticon actions
+```
 
 ## Go Live
 

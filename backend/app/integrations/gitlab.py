@@ -138,6 +138,58 @@ class GitLabClient:
         )
         return result if isinstance(result, dict) else {"status": "sent"}
 
+    def create_branch(self, project_path: str, branch_name: str, ref: str) -> dict:
+        if self.settings.dry_run_actions:
+            return {
+                "status": "dry_run",
+                "target": f"{project_path}:{branch_name}",
+                "ref": ref,
+            }
+        result = self._request(
+            "POST",
+            f"/projects/{self._project_id(project_path)}/repository/branches",
+            json={"branch": branch_name, "ref": ref},
+        )
+        return result if isinstance(result, dict) else {"status": "created", "branch": branch_name}
+
+    def create_commit(self, project_path: str, branch_name: str, commit_message: str, actions: list[dict]) -> dict:
+        if self.settings.dry_run_actions:
+            return {
+                "status": "dry_run",
+                "target": f"{project_path}:{branch_name}",
+                "commit_message": commit_message,
+                "actions": actions,
+            }
+        result = self._request(
+            "POST",
+            f"/projects/{self._project_id(project_path)}/repository/commits",
+            json={"branch": branch_name, "commit_message": commit_message, "actions": actions},
+        )
+        return result if isinstance(result, dict) else {"status": "committed", "branch": branch_name}
+
+    def create_merge_request(self, project_path: str, source_branch: str, target_branch: str, title: str, description: str) -> dict:
+        if self.settings.dry_run_actions:
+            return {
+                "status": "dry_run",
+                "target": f"{project_path}:{source_branch}->{target_branch}",
+                "title": title,
+                "description": description,
+                "web_url": f"{self.base_url.rstrip('/')}/{project_path}/-/merge_requests/new?merge_request[source_branch]={source_branch}",
+            }
+        result = self._request(
+            "POST",
+            f"/projects/{self._project_id(project_path)}/merge_requests",
+            json={
+                "source_branch": source_branch,
+                "target_branch": target_branch,
+                "title": title,
+                "description": description,
+                "remove_source_branch": True,
+                "squash": False,
+            },
+        )
+        return result if isinstance(result, dict) else {"status": "opened", "source_branch": source_branch}
+
 
 def enrich_payload_from_gitlab(payload: dict) -> dict:
     if payload.get("object_kind") != "merge_request" and payload.get("event_name") != "merge_request":

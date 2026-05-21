@@ -1,4 +1,10 @@
+import hashlib
+import hmac
+import time
+from urllib.parse import parse_qs
+
 import httpx
+from fastapi import HTTPException, Request
 
 from app.config import get_settings
 
@@ -41,3 +47,34 @@ class SlackNotifier:
         if field_blocks:
             blocks.append({"type": "section", "fields": field_blocks[:8]})
         return {"text": f"Panopticon {severity_label}: {title}", "blocks": blocks}
+
+
+async def verified_slack_body(request: Request, *, tolerance_seconds: int = 300) -> bytes:
+    settings = get_settings()
+    body = await request.body()
+    if not settings.slack_signing_secret:
+        raise HTTPException(status_code=403, detail="Slack signing secret is not configured")
+
+    timestamp = request.headers.get("X-Slack-Request-Timestamp", "")
+    signature = request.headers.get("X-Slack-Signature", "")
+    if not timestamp or not signature:
+        raise HTTPException(status_code=403, detail="Missing Slack signature headers")
+
+    try:
+        timestamp_int = int(timestamp)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid Slack timestamp") from None
+
+    if abs(int(time.time()) - timestamp_int) > tolerance_seconds:
+        raise HTTPException(status_code=403, detail="Stale Slack request")
+
+    base = b"v0:" + timestamp.encode("utf-8") + b":" + body
+    expected = "v0=" + hmac.new(settings.slack_signing_secret.encode("utf-8"), base, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        raise HTTPException(status_code=403, detail="Invalid Slack signature")
+    return body
+
+
+def parse_slack_form(body: bytes) -> dict[str, str]:
+    parsed = parse_qs(body.decode("utf-8"), keep_blank_values=True)
+    return {key: values[0] if values else "" for key, values in parsed.items()}

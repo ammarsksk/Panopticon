@@ -196,6 +196,48 @@ class IncidentRecord(Base):
     event: Mapped[OperationalEvent | None] = relationship(back_populates="incidents")
 
 
+class ObservabilityEvent(Base):
+    __tablename__ = "observability_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    provider: Mapped[str] = mapped_column(String(80), default="generic", index=True)
+    event_uid: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    project_path: Mapped[str] = mapped_column(String(255), default="", index=True)
+    service_name: Mapped[str] = mapped_column(String(255), default="", index=True)
+    environment: Mapped[str] = mapped_column(String(120), default="", index=True)
+    severity: Mapped[str] = mapped_column(String(40), default="info", index=True)
+    signal_type: Mapped[str] = mapped_column(String(80), default="alert", index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    message: Mapped[str] = mapped_column(Text, default="")
+    metric_name: Mapped[str] = mapped_column(String(255), default="")
+    trace_id: Mapped[str] = mapped_column(String(160), default="", index=True)
+    alert_url: Mapped[str] = mapped_column(String(500), default="")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class IncidentCorrelation(Base):
+    __tablename__ = "incident_correlations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    severity: Mapped[str] = mapped_column(String(40), default="info", index=True)
+    status: Mapped[str] = mapped_column(String(40), default="open", index=True)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    suspected_cause: Mapped[str] = mapped_column(Text, default="")
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    timeline: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    related_observability_event_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
+    related_pipeline_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    related_risk_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
+    related_incident_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
+    recommendations: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
 class Recommendation(Base):
     __tablename__ = "recommendations"
 
@@ -248,6 +290,41 @@ class ActionApproval(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     agent_action_id: Mapped[int] = mapped_column(ForeignKey("agent_actions.id"), index=True)
+    decision: Mapped[str] = mapped_column(String(40), index=True)
+    actor: Mapped[str] = mapped_column(String(120), default="local_user")
+    reason: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class FixPlan(Base):
+    __tablename__ = "fix_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("gitlab_projects.id"), nullable=True, index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    source_type: Mapped[str] = mapped_column(String(80), default="", index=True)
+    source_id: Mapped[str] = mapped_column(String(80), default="")
+    title: Mapped[str] = mapped_column(String(255), default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(60), default="draft", index=True)
+    requires_approval: Mapped[bool] = mapped_column(Boolean, default=True)
+    fix_type: Mapped[str] = mapped_column(String(80), default="", index=True)
+    base_branch: Mapped[str] = mapped_column(String(255), default="")
+    branch_name: Mapped[str] = mapped_column(String(255), default="")
+    merge_request_iid: Mapped[str] = mapped_column(String(80), default="")
+    merge_request_url: Mapped[str] = mapped_column(String(500), default="")
+    plan_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class FixPlanApproval(Base):
+    __tablename__ = "fix_plan_approvals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    fix_plan_id: Mapped[int] = mapped_column(ForeignKey("fix_plans.id"), index=True)
     decision: Mapped[str] = mapped_column(String(40), index=True)
     actor: Mapped[str] = mapped_column(String(120), default="local_user")
     reason: Mapped[str] = mapped_column(Text, default="")

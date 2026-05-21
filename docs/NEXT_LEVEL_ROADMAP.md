@@ -27,6 +27,27 @@ The long-term loop is:
 Observe -> Analyze -> Remember -> Recommend -> Approve -> Act -> Learn
 ```
 
+## Agent Runtime Direction
+
+Panopticon currently runs as a FastAPI application with:
+
+- a Vertex Gemini reasoner
+- REST agent tools
+- an MCP-compatible JSON-RPC endpoint at `/mcp`
+- approval-gated GitLab and Slack actions
+
+This is the correct local product architecture while the app is still evolving quickly.
+
+Vertex AI Agent Builder should be used as the production agent platform layer, not as a replacement for the Panopticon app. The planned path is:
+
+1. Keep Panopticon tools available through REST and MCP.
+2. Package the reasoning/orchestration layer so it can run under Vertex AI Agent Engine.
+3. Register or expose Panopticon MCP tools to the managed agent runtime.
+4. Use Agent Builder/Agent Engine for managed sessions, memory, tracing, monitoring, and governance.
+5. Keep the FastAPI backend as the product API and source of operational truth.
+
+This means Panopticon already has the MCP server shape needed for Agent Builder compatibility, and the next runtime-focused phase should package and deploy the agent rather than rebuilding the product inside the Google Cloud console.
+
 ## Guiding Principles
 
 ### 1. GitLab is the source of truth
@@ -149,6 +170,8 @@ The next major version should include these primary surfaces:
 /projects/[projectId]/incidents
 /actions
 /chat
+/fix-plans
+/observability
 /metrics
 /settings/integrations
 ```
@@ -169,6 +192,10 @@ Next we should add or evolve toward these concepts:
 - `action_approvals`
 - `chat_threads`
 - `chat_messages`
+- `fix_plans`
+- `fix_plan_approvals`
+- `observability_events`
+- `incident_correlations`
 - `integration_status`
 - `project_rules`
 
@@ -488,7 +515,7 @@ The chat UI should include:
 - Action requests create proposed actions, not immediate live actions.
 - Chat uses Vertex Gemini for final reasoning when `GEMINI_ENABLED=true`.
 - If Gemini is disabled or unavailable, chat falls back to deterministic grounded answers.
-- The app's internal Panopticon tools are the current tool layer; external MCP servers are a future integration target, not implemented yet.
+- The app exposes Panopticon tools through REST and an MCP-compatible JSON-RPC endpoint.
 
 ## Phase 6: Slack App Upgrade
 
@@ -574,8 +601,10 @@ Add endpoints:
 
 ```text
 POST /api/fix-plans
+GET /api/fix-plans
 GET /api/fix-plans/{id}
 POST /api/fix-plans/{id}/approve
+POST /api/fix-plans/{id}/reject
 POST /api/fix-plans/{id}/create-branch
 POST /api/fix-plans/{id}/open-merge-request
 ```
@@ -607,6 +636,8 @@ Add fix plan preview:
 - User can preview the diff.
 - User approval is required before branch/MR creation.
 - The final output is a GitLab merge request.
+- Local development uses dry-run branch, commit, and MR payloads by default.
+- The MCP endpoint exposes fix-plan tools for external agent runtimes.
 
 ## Phase 8: Observability Integrations
 
@@ -666,6 +697,8 @@ Add incident correlation view:
 - Panopticon can ingest at least one observability webhook shape.
 - Incidents can show correlated GitLab and observability signals.
 - Root cause explanations cite both code activity and production symptoms.
+- Observability context is available through REST and MCP tools.
+- Demo data includes correlated observability signals for local validation.
 
 ## Phase 9: Metrics And Engineering Health
 
@@ -783,46 +816,64 @@ GitLab project sync must come first because every later feature needs real proje
 - Phase 2: Project Detail Workspace is implemented.
 - Phase 3: Recommendation Engine V2 is implemented.
 - Phase 4: Approval And Action System is implemented.
-- Phase 5: Chat Interface is implemented with intent-specific retrieval for pipeline, risk, merge request, incident, memory, and action questions. Chat now sends focused evidence to Vertex Gemini through the backend reasoner when Gemini is enabled, and uses deterministic answers only as fallback. Chat answers should stay focused on the user question and cite only the records used. MCP server integration is still pending.
-- Next recommended phase: Slack App Upgrade.
+- Phase 5: Chat Interface is implemented with intent-specific retrieval for pipeline, risk, merge request, incident, memory, and action questions. Chat now sends focused evidence to Vertex Gemini through the backend reasoner when Gemini is enabled, and uses deterministic answers only as fallback. Chat answers should stay focused on the user question and cite only the records used.
+- Phase 5.5: Agent Tool Layer is implemented with REST tool invocation and an MCP-compatible JSON-RPC endpoint for tool discovery and calls.
+- Phase 5.6: Chat Hardening is implemented with rich multi-project seed data, project inference from natural language, priority triage questions, broader MCP chat context tools, and incomplete Gemini answer repair.
+- Phase 6: Slack App Upgrade is implemented with signed slash commands, interactions for action approval/rejection, Events API URL verification, and dashboard setup status.
+- Phase 7: Safe Code-Changing Agent is implemented with fix-plan records, approval/rejection, dry-run GitLab branch/commit/MR execution, safety validation, a `/fix-plans` UI, and MCP tools for creating/listing fix plans.
+- Phase 8: Observability Integrations is implemented with generic observability event ingestion, Grafana/Prometheus/Sentry-style webhook normalization, stored incident correlations, correlated GitLab timelines, a `/observability` UI, demo observability seed data, and MCP tools for observability context.
+- Next recommended phase: Metrics And Engineering Health.
 
 ## Immediate Next Implementation Pipeline
 
-The next concrete implementation sprint should be Phase 6.
+The next concrete implementation sprint should build Phase 9 metrics and engineering health. The Phase 10 feedback loop stays deferred for now.
 
-### Sprint 6 Scope
+### Sprint 9 Scope
 
-Build the Slack app upgrade.
+Add metrics that show whether projects are getting healthier over time.
 
 Deliverables:
 
-- Slack signing secret configuration
-- Slack slash command endpoint
-- Slack interaction endpoint
-- Slack event endpoint
-- command routing for risks, project summaries, and chat questions
-- approval buttons for proposed actions
-- Slack setup status panel updates
-- tests for Slack signature verification and command handling
+- metrics API for project and organization-level health
+- derived daily snapshots from stored GitLab, action, incident, and observability records
+- project comparison by failed pipeline rate, risk count, open incident count, and action throughput
+- `/metrics` UI with trend cards and project ranking
+- MCP tool for metrics context
 
-### Sprint 6 Non-Goals
+### Sprint 9 Non-Goals
 
-Do not build code-changing actions yet.
+Do not implement Phase 10 recommendation feedback yet.
 
-Do not make Slack actions live by default.
+Do not build long-term forecasting before the basic health metrics are reliable.
 
-Do not make live external actions automatic.
+Do not depend on external analytics services.
 
-Do not make live destructive actions.
+Do not make metrics editable by users.
 
-### Sprint 6 Done Definition
+### Sprint 9 Done Definition
 
-Sprint 6 is done when:
+Sprint 9 is done when:
 
-- Slack slash commands can query Panopticon
-- Slack buttons can approve or reject proposed actions
-- Slack requests are signature-verified
-- Slack responses link back to dashboard/action records
+- organization health metrics are available through API
+- project health rankings are available through API
+- the `/metrics` page renders useful data from current database records
+- metrics include observability correlations from Phase 8
+- backend tests pass
+- frontend build passes
+
+### Deferred Phase 10
+
+The feedback and learning loop remains important, but it is intentionally paused until after Phase 9 metrics are in place.
+
+Deferred work:
+
+- recommendation feedback buttons
+- false-positive labels
+- recommendation acceptance metrics
+- project-specific learned rules from user feedback
+- Slack feedback actions
+
+The reason is sequencing: metrics should exist before feedback, so feedback can be measured against delivery health and recommendation quality.
 - backend tests pass
 - frontend build passes
 

@@ -31,6 +31,7 @@ def _csv_env(name: str, default: list[str]) -> list[str]:
 class Settings:
     app_name: str = "Panopticon"
     app_env: str = "development"
+    app_public_url: str = "http://localhost:3000"
     database_url: str = "sqlite:///./panopticon.db"
     allowed_origins: list[str] | None = None
     db_pool_size: int = 5
@@ -39,14 +40,17 @@ class Settings:
     gitlab_base_url: str = "https://gitlab.com"
     gitlab_token: str = ""
     slack_webhook_url: str = ""
+    slack_signing_secret: str = ""
+    slack_bot_token: str = ""
+    slack_default_channel: str = ""
     dry_run_actions: bool = True
     dispatch_actions: bool = True
     gemini_enabled: bool = False
-    gemini_model: str = "gemini-3-pro"
+    gemini_model: str = "gemini-2.5-pro"
     gemini_api_key: str = ""
     google_genai_use_vertexai: bool = False
     google_cloud_project: str = ""
-    google_cloud_location: str = "us-central1"
+    google_cloud_location: str = "global"
 
     def __post_init__(self) -> None:
         if self.allowed_origins is None:
@@ -67,6 +71,8 @@ class Settings:
             missing.append("GITLAB_WEBHOOK_SECRET")
         if not self.gitlab_token:
             missing.append("GITLAB_TOKEN")
+        if not self.slack_signing_secret:
+            missing.append("SLACK_SIGNING_SECRET")
         if not self.gemini_enabled:
             missing.append("GEMINI_ENABLED=true")
         if not self.google_genai_use_vertexai:
@@ -86,6 +92,7 @@ def get_settings() -> Settings:
     return Settings(
         app_name=os.getenv("APP_NAME", "Panopticon"),
         app_env=os.getenv("APP_ENV", "development"),
+        app_public_url=os.getenv("APP_PUBLIC_URL", "http://localhost:3000"),
         database_url=os.getenv("DATABASE_URL", "sqlite:///./panopticon.db"),
         allowed_origins=_csv_env("ALLOWED_ORIGINS", ["http://localhost:3000", "http://127.0.0.1:3000"]),
         db_pool_size=_int_env("DB_POOL_SIZE", 5),
@@ -94,12 +101,15 @@ def get_settings() -> Settings:
         gitlab_base_url=os.getenv("GITLAB_BASE_URL", "https://gitlab.com"),
         gitlab_token=os.getenv("GITLAB_TOKEN", ""),
         slack_webhook_url=os.getenv("SLACK_WEBHOOK_URL", ""),
+        slack_signing_secret=os.getenv("SLACK_SIGNING_SECRET", ""),
+        slack_bot_token=os.getenv("SLACK_BOT_TOKEN", ""),
+        slack_default_channel=os.getenv("SLACK_DEFAULT_CHANNEL", ""),
         dry_run_actions=_bool_env("DRY_RUN_ACTIONS", True),
         dispatch_actions=_bool_env("DISPATCH_ACTIONS", True),
         gemini_enabled=_bool_env("GEMINI_ENABLED", False),
-        gemini_model=os.getenv("GEMINI_MODEL", "gemini-3-pro"),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-pro"),
         gemini_api_key=os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", ""),
         google_genai_use_vertexai=_bool_env("GOOGLE_GENAI_USE_VERTEXAI", False),
         google_cloud_project=os.getenv("GOOGLE_CLOUD_PROJECT", ""),
-        google_cloud_location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        google_cloud_location=os.getenv("GOOGLE_CLOUD_LOCATION", "global"),
     )

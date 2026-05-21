@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bot, Send } from "lucide-react";
 import { AiIntegrationStatus, ChatMessage, ChatThread, GitLabProject, getChatMessages, sendChatMessage } from "@/lib/api";
 
@@ -13,9 +13,11 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
   const [threadId, setThreadId] = useState<number | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [preparedActions, setPreparedActions] = useState<number[]>([]);
+  const [typingContent, setTypingContent] = useState<Record<number, string>>({});
   const [input, setInput] = useState("Which risks or failures should I look at first?");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const typingTimer = useRef<number | null>(null);
 
   useEffect(() => {
     if (!threadId) return;
@@ -23,6 +25,38 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
       .then(setMessages)
       .catch(() => setMessages([]));
   }, [threadId]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimer.current) window.clearInterval(typingTimer.current);
+    };
+  }, []);
+
+  function startAssistantTyping(message: ChatMessage) {
+    if (typingTimer.current) window.clearInterval(typingTimer.current);
+    const words = message.content.split(/(\s+)/).filter(Boolean);
+    if (!words.length) {
+      setBusy(false);
+      return;
+    }
+    let index = 0;
+    setTypingContent((current) => ({ ...current, [message.id]: "" }));
+    typingTimer.current = window.setInterval(() => {
+      index += 1;
+      const visible = words.slice(0, index).join("");
+      setTypingContent((current) => ({ ...current, [message.id]: visible }));
+      if (index >= words.length) {
+        if (typingTimer.current) window.clearInterval(typingTimer.current);
+        typingTimer.current = null;
+        setTypingContent((current) => {
+          const next = { ...current };
+          delete next[message.id];
+          return next;
+        });
+        setBusy(false);
+      }
+    }, 35);
+  }
 
   async function submit() {
     const text = input.trim();
@@ -35,9 +69,9 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
       setMessages((current) => [...current, response.user_message, response.assistant_message]);
       setPreparedActions(response.prepared_actions.map((action) => action.id));
       setInput("");
+      startAssistantTyping(response.assistant_message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Chat request failed.");
-    } finally {
       setBusy(false);
     }
   }
@@ -54,6 +88,7 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
                 setThreadId(undefined);
                 setMessages([]);
                 setPreparedActions([]);
+                setTypingContent({});
               }}
               className="text-xs font-semibold uppercase text-teal-700"
             >
@@ -66,6 +101,7 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
               setProjectId(Number(event.target.value));
               setThreadId(undefined);
               setMessages([]);
+              setTypingContent({});
             }}
             className="mt-2 w-full border border-slate-300 bg-white p-2 text-sm"
           >
@@ -112,6 +148,7 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
                     setThreadId(thread.id);
                     setProjectId(thread.project_id ?? 0);
                     setPreparedActions([]);
+                    setTypingContent({});
                   }}
                   className="block w-full border border-slate-200 p-2 text-left text-sm text-slate-700"
                 >
@@ -142,21 +179,7 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
                   <Badge label={message.role} />
                   <span className="text-xs text-slate-500">{new Date(message.created_at).toLocaleString()}</span>
                 </div>
-                <p className="whitespace-pre-line text-sm leading-6 text-slate-800">{message.content}</p>
-                {message.citations.length ? (
-                  <div className="mt-4">
-                    <div className="text-xs font-semibold uppercase text-slate-500">Citations</div>
-                    <div className="mt-2 grid gap-2 md:grid-cols-2">
-                      {message.citations.map((citation) => (
-                        <div key={`${citation.type}-${citation.id}`} className="border border-slate-200 bg-white p-2 text-xs text-slate-600">
-                          <div className="font-semibold text-slate-800">{citation.type} #{citation.id}</div>
-                          <div>{citation.label}</div>
-                          {citation.summary ? <div className="mt-1 text-slate-500">{citation.summary}</div> : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+                <p className="whitespace-pre-line text-sm leading-6 text-slate-800">{typingContent[message.id] ?? message.content}</p>
               </article>
             ))
           ) : (
