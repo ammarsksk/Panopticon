@@ -20,6 +20,7 @@ def reset_demo_data(db) -> None:
         models.ChatThread,
         models.ActionApproval,
         models.AgentAction,
+        models.EngineeringMetricSnapshot,
         models.IncidentCorrelation,
         models.ObservabilityEvent,
         models.ActionDispatch,

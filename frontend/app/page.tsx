@@ -178,6 +178,9 @@ export default async function Home() {
             <Link href="/observability" className="border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
               Observability
             </Link>
+            <Link href="/metrics" className="border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
+              Metrics
+            </Link>
             <Link href="/chat" className="border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-700">
               Chat
             </Link>

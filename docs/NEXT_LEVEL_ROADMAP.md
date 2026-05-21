@@ -196,6 +196,7 @@ Next we should add or evolve toward these concepts:
 - `fix_plan_approvals`
 - `observability_events`
 - `incident_correlations`
+- `engineering_metric_snapshots`
 - `integration_status`
 - `project_rules`
 
@@ -743,6 +744,8 @@ Views:
 - Metrics are derived from stored records.
 - Project trends are visible.
 - The app can show whether Panopticon is reducing repeated failures.
+- Metrics include GitLab delivery state, action throughput, incidents, fix plans, and observability correlations.
+- Metrics are exposed through REST and MCP tools.
 
 ## Phase 10: Feedback And Learning Loop
 
@@ -822,48 +825,42 @@ GitLab project sync must come first because every later feature needs real proje
 - Phase 6: Slack App Upgrade is implemented with signed slash commands, interactions for action approval/rejection, Events API URL verification, and dashboard setup status.
 - Phase 7: Safe Code-Changing Agent is implemented with fix-plan records, approval/rejection, dry-run GitLab branch/commit/MR execution, safety validation, a `/fix-plans` UI, and MCP tools for creating/listing fix plans.
 - Phase 8: Observability Integrations is implemented with generic observability event ingestion, Grafana/Prometheus/Sentry-style webhook normalization, stored incident correlations, correlated GitLab timelines, a `/observability` UI, demo observability seed data, and MCP tools for observability context.
-- Next recommended phase: Metrics And Engineering Health.
+- Phase 9: Metrics And Engineering Health is implemented with organization health, project rankings, daily metric snapshots, action throughput, observability-aware scoring, a `/metrics` UI, and MCP tools for metrics context.
+- Phase 10: Feedback And Learning Loop is deferred.
+- Next recommended phase: production hardening, Agent Builder packaging, or Phase 10 when feedback becomes the priority.
 
 ## Immediate Next Implementation Pipeline
 
-The next concrete implementation sprint should build Phase 9 metrics and engineering health. The Phase 10 feedback loop stays deferred for now.
+The next concrete implementation sprint should either package Panopticon for Vertex AI Agent Builder / Agent Engine or begin production hardening. The Phase 10 feedback loop stays deferred for now.
 
-### Sprint 9 Scope
+### Optional Sprint 10A: Production Hardening
 
-Add metrics that show whether projects are getting healthier over time.
+Make the product easier to operate outside local development.
 
 Deliverables:
 
-- metrics API for project and organization-level health
-- derived daily snapshots from stored GitLab, action, incident, and observability records
-- project comparison by failed pipeline rate, risk count, open incident count, and action throughput
-- `/metrics` UI with trend cards and project ranking
-- MCP tool for metrics context
+- production migration runbook
+- environment validation endpoint
+- deployment Docker/Compose cleanup
+- safer secret redaction in logs and payload previews
+- health checks for GitLab, Slack, Vertex Gemini, database, and MCP tools
+- smoke test script that exercises the full local flow
 
-### Sprint 9 Non-Goals
+### Optional Sprint 10B: Agent Builder Packaging
 
-Do not implement Phase 10 recommendation feedback yet.
+Prepare the existing agent/tool layer for managed Google Cloud agent runtime.
 
-Do not build long-term forecasting before the basic health metrics are reliable.
+Deliverables:
 
-Do not depend on external analytics services.
-
-Do not make metrics editable by users.
-
-### Sprint 9 Done Definition
-
-Sprint 9 is done when:
-
-- organization health metrics are available through API
-- project health rankings are available through API
-- the `/metrics` page renders useful data from current database records
-- metrics include observability correlations from Phase 8
-- backend tests pass
-- frontend build passes
+- document Agent Builder / Agent Engine deployment shape
+- define MCP tool registration requirements
+- isolate the agent orchestration entrypoint from FastAPI routes
+- add a cloud deployment checklist
+- add a managed-runtime smoke test plan
 
 ### Deferred Phase 10
 
-The feedback and learning loop remains important, but it is intentionally paused until after Phase 9 metrics are in place.
+The feedback and learning loop remains important, but it is intentionally paused until after metrics are stable in real usage.
 
 Deferred work:
 
@@ -873,7 +870,7 @@ Deferred work:
 - project-specific learned rules from user feedback
 - Slack feedback actions
 
-The reason is sequencing: metrics should exist before feedback, so feedback can be measured against delivery health and recommendation quality.
+The reason is sequencing: feedback should be added only after we can measure it against delivery health and recommendation quality.
 - backend tests pass
 - frontend build passes
 

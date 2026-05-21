@@ -19,6 +19,7 @@ from app.services.agent_tools import AgentToolService, mcp_text_result
 from app.services.chat import ChatService
 from app.services.fix_plans import FixPlanService
 from app.services.gitlab_sync import GitLabProjectSyncService
+from app.services.metrics import MetricsService
 from app.services.observability import ObservabilityService
 from app.services.slack_app import SlackAppService, parse_interaction_payload
 
@@ -242,6 +243,26 @@ def list_observability_events(db: Session = Depends(get_db), limit: int = 50, pr
 @app.get("/api/observability/correlations", response_model=list[schemas.IncidentCorrelationOut])
 def list_incident_correlations(db: Session = Depends(get_db), limit: int = 50, project_path: str = ""):
     return ObservabilityService(db).list_correlations(project_path=project_path, limit=max(1, min(limit, 100)))
+
+
+@app.get("/api/metrics/summary", response_model=schemas.MetricsSummaryOut)
+def metrics_summary(db: Session = Depends(get_db)):
+    return MetricsService(db).organization_summary()
+
+
+@app.get("/api/metrics/projects", response_model=list[schemas.ProjectHealthOut])
+def project_metrics(db: Session = Depends(get_db), limit: int = 100):
+    return MetricsService(db).project_health(limit=max(1, min(limit, 500)))
+
+
+@app.post("/api/metrics/snapshots/refresh", response_model=list[schemas.EngineeringMetricSnapshotOut])
+def refresh_metric_snapshots(db: Session = Depends(get_db)):
+    return MetricsService(db).refresh_snapshots()
+
+
+@app.get("/api/metrics/snapshots", response_model=list[schemas.EngineeringMetricSnapshotOut])
+def list_metric_snapshots(db: Session = Depends(get_db), limit: int = 100, project_path: str = ""):
+    return MetricsService(db).list_snapshots(project_path=project_path, limit=max(1, min(limit, 500)))
 
 
 @app.get("/api/memory", response_model=list[schemas.MemoryRecordOut])

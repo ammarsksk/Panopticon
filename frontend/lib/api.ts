@@ -220,6 +220,59 @@ export type IncidentCorrelation = {
   updated_at: string;
 };
 
+export type ProjectHealth = {
+  project_id: number;
+  project_path: string;
+  name: string;
+  namespace: string;
+  health_score: number;
+  health_level: "healthy" | "watch" | "at_risk" | "critical";
+  failed_pipeline_rate: number;
+  pipeline_count: number;
+  failed_pipeline_count: number;
+  open_merge_requests: number;
+  active_risks: number;
+  max_risk_score: number;
+  open_incidents: number;
+  observability_alerts: number;
+  pending_actions: number;
+  completed_actions: number;
+  fix_plans: number;
+  recommendation_count: number;
+  last_activity_at: string | null;
+  top_reasons: string[];
+};
+
+export type MetricsSummary = {
+  generated_at: string;
+  project_count: number;
+  average_health_score: number;
+  health_level: "healthy" | "watch" | "at_risk" | "critical";
+  failed_pipeline_rate: number;
+  total_pipelines: number;
+  failed_pipelines: number;
+  active_risks: number;
+  open_incidents: number;
+  observability_alerts: number;
+  pending_actions: number;
+  completed_actions: number;
+  fix_plans: number;
+  projects_at_risk: number;
+  healthiest_projects: ProjectHealth[];
+  riskiest_projects: ProjectHealth[];
+};
+
+export type MetricSnapshot = {
+  id: number;
+  scope_type: string;
+  project_path: string;
+  snapshot_date: string;
+  health_score: number;
+  metrics: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MemoryRecord = {
   id: number;
   project_path: string;
@@ -376,6 +429,20 @@ export async function getObservabilityData() {
   ]);
 
   return { events, correlations, projects };
+}
+
+export async function getMetricsData() {
+  const [summary, projects, snapshots] = await Promise.all([
+    get<MetricsSummary>("/api/metrics/summary"),
+    get<ProjectHealth[]>("/api/metrics/projects"),
+    get<MetricSnapshot[]>("/api/metrics/snapshots")
+  ]);
+
+  return { summary, projects, snapshots };
+}
+
+export async function refreshMetricSnapshots() {
+  return post<MetricSnapshot[]>("/api/metrics/snapshots/refresh");
 }
 
 export async function getProjectsData() {

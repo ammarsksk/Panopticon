@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -227,6 +227,61 @@ class ObservabilityIngestOut(BaseModel):
     event: ObservabilityEventOut
     correlation: IncidentCorrelationOut | None
     deduplicated: bool = False
+
+
+class ProjectHealthOut(BaseModel):
+    project_id: int
+    project_path: str
+    name: str
+    namespace: str
+    health_score: float
+    health_level: str
+    failed_pipeline_rate: float
+    pipeline_count: int
+    failed_pipeline_count: int
+    open_merge_requests: int
+    active_risks: int
+    max_risk_score: float
+    open_incidents: int
+    observability_alerts: int
+    pending_actions: int
+    completed_actions: int
+    fix_plans: int
+    recommendation_count: int
+    last_activity_at: datetime | None
+    top_reasons: list[str]
+
+
+class MetricsSummaryOut(BaseModel):
+    generated_at: datetime
+    project_count: int
+    average_health_score: float
+    health_level: str
+    failed_pipeline_rate: float
+    total_pipelines: int
+    failed_pipelines: int
+    active_risks: int
+    open_incidents: int
+    observability_alerts: int
+    pending_actions: int
+    completed_actions: int
+    fix_plans: int
+    projects_at_risk: int
+    healthiest_projects: list[ProjectHealthOut]
+    riskiest_projects: list[ProjectHealthOut]
+
+
+class EngineeringMetricSnapshotOut(BaseModel):
+    id: int
+    scope_type: str
+    project_path: str
+    snapshot_date: date
+    health_score: float
+    metrics: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RecommendationOut(BaseModel):

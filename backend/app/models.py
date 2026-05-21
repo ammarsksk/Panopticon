@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -234,6 +234,19 @@ class IncidentCorrelation(Base):
     related_risk_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
     related_incident_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
     recommendations: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class EngineeringMetricSnapshot(Base):
+    __tablename__ = "engineering_metric_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scope_type: Mapped[str] = mapped_column(String(40), default="project", index=True)
+    project_path: Mapped[str] = mapped_column(String(255), default="", index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, index=True)
+    health_score: Mapped[float] = mapped_column(Float, default=0.0, index=True)
+    metrics: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 

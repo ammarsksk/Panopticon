@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.services.agent_actions import AgentActionService
 from app.services.fix_plans import FixPlanService
+from app.services.metrics import MetricsService
 from app.services.observability import ObservabilityService
 
 
@@ -94,6 +95,16 @@ class AgentToolService:
                     "message": "string",
                 },
             ),
+            _tool(
+                "get_metrics_context",
+                "Fetch organization and project engineering health metrics.",
+                {"limit": "integer"},
+            ),
+            _tool(
+                "refresh_metric_snapshots",
+                "Create or update today's derived engineering metric snapshots.",
+                {},
+            ),
         ]
 
     def list_mcp_tools(self) -> list[dict[str, Any]]:
@@ -155,6 +166,12 @@ class AgentToolService:
                 "correlation": _record("incident_correlations", correlation) if correlation else None,
                 "deduplicated": deduplicated,
             }
+        if name == "get_metrics_context":
+            service = MetricsService(self.db)
+            return {"summary": service.organization_summary(), "projects": service.project_health(limit=limit)}
+        if name == "refresh_metric_snapshots":
+            snapshots = MetricsService(self.db).refresh_snapshots()
+            return {"snapshots": [_record("engineering_metric_snapshots", item) for item in snapshots]}
         raise LookupError(f"Unknown tool: {name}")
 
     def chat_context(self, project: models.GitLabProject | None, *, limit: int = 12) -> dict[str, Any]:
@@ -172,6 +189,7 @@ class AgentToolService:
             "fix_plans": self._records(models.FixPlan, project_path, desc(models.FixPlan.updated_at), limit),
             "observability_events": self._records(models.ObservabilityEvent, project_path, desc(models.ObservabilityEvent.observed_at), limit),
             "incident_correlations": self._records(models.IncidentCorrelation, project_path, desc(models.IncidentCorrelation.updated_at), limit),
+            "metric_snapshots": self._records(models.EngineeringMetricSnapshot, project_path, desc(models.EngineeringMetricSnapshot.snapshot_date), limit),
             "memory": self._records(models.MemoryRecord, project_path, desc(models.MemoryRecord.created_at), limit),
         }
 
@@ -211,6 +229,7 @@ class AgentToolService:
             "fix_plans": [_record("fix_plans", item) for item in self._records(models.FixPlan, project_path, desc(models.FixPlan.updated_at), limit)],
             "observability_events": [_record("observability_events", item) for item in self._records(models.ObservabilityEvent, project_path, desc(models.ObservabilityEvent.observed_at), limit)],
             "incident_correlations": [_record("incident_correlations", item) for item in self._records(models.IncidentCorrelation, project_path, desc(models.IncidentCorrelation.updated_at), limit)],
+            "metric_snapshots": [_record("engineering_metric_snapshots", item) for item in self._records(models.EngineeringMetricSnapshot, project_path, desc(models.EngineeringMetricSnapshot.snapshot_date), limit)],
             "memory": [_record("memory", item) for item in self._records(models.MemoryRecord, project_path, desc(models.MemoryRecord.created_at), limit)],
         }
 
@@ -401,6 +420,9 @@ def _record(kind: str, record: Any) -> dict[str, Any]:
         "alert_url",
         "suspected_cause",
         "confidence",
+        "scope_type",
+        "snapshot_date",
+        "health_score",
     ]:
         if hasattr(record, field):
             data[field] = getattr(record, field)
@@ -418,6 +440,7 @@ def _record(kind: str, record: Any) -> dict[str, Any]:
         "related_pipeline_ids",
         "related_risk_ids",
         "related_incident_ids",
+        "metrics",
     ]:
         if hasattr(record, json_field):
             data[json_field] = getattr(record, json_field)
