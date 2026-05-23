@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Bot, FileCode2, GitBranch, ShieldCheck } from "lucide-react";
 import { FixPlan, getFixPlans, getProjectsData } from "@/lib/api";
+import { redirectIfUnauthorized } from "../authRedirect";
 import { FixPlanControls, NewFixPlanForm } from "./FixPlanControls";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
@@ -110,7 +111,13 @@ function PlanCard({ plan }: { plan: FixPlan }) {
 }
 
 export default async function FixPlansPage() {
-  const [{ projects }, plans] = await Promise.all([getProjectsData(), getFixPlans()]);
+  let data;
+  try {
+    data = await Promise.all([getProjectsData(), getFixPlans()]);
+  } catch (error) {
+    redirectIfUnauthorized(error);
+  }
+  const [{ projects }, plans] = data;
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">

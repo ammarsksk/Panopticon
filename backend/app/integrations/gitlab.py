@@ -45,16 +45,20 @@ def event_type_from_payload(payload: dict) -> str:
 
 
 class GitLabClient:
-    def __init__(self) -> None:
+    def __init__(self, access_token: str | None = None, auth_mode: str = "private_token") -> None:
         self.settings = get_settings()
         self.base_url = self.settings.gitlab_base_url.rstrip("/")
+        self.access_token = access_token or self.settings.gitlab_token
+        self.auth_mode = auth_mode if access_token else "private_token"
 
     @property
     def configured(self) -> bool:
-        return bool(self.settings.gitlab_token)
+        return bool(self.access_token)
 
     def _headers(self) -> dict[str, str]:
-        return {"PRIVATE-TOKEN": self.settings.gitlab_token}
+        if self.auth_mode == "bearer":
+            return {"Authorization": f"Bearer {self.access_token}"}
+        return {"PRIVATE-TOKEN": self.access_token}
 
     def _project_id(self, project_path: str) -> str:
         return quote(project_path, safe="")

@@ -2,18 +2,24 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.config import get_settings
-from app.integrations.gitlab import GitLabClient
 from app.integrations.slack import SlackNotifier
 from app.memory.repository import OperationalMemory
+from app.services.oauth import gitlab_client_for_workspace, slack_credentials_for_workspace
 
 
 class ActionDispatcher:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, workspace_id: int | None = None):
         self.db = db
+        self.workspace_id = workspace_id
         self.settings = get_settings()
-        self.gitlab = GitLabClient()
-        self.slack = SlackNotifier()
-        self.memory = OperationalMemory(db)
+        self.gitlab = gitlab_client_for_workspace(db, workspace_id)
+        slack_credentials = slack_credentials_for_workspace(db, workspace_id)
+        self.slack = SlackNotifier(
+            webhook_url=slack_credentials.get("webhook_url", ""),
+            bot_token=slack_credentials.get("bot_token", ""),
+            default_channel=slack_credentials.get("channel", ""),
+        )
+        self.memory = OperationalMemory(db, workspace_id=workspace_id)
 
     def dispatch(self, recommendation: models.Recommendation, context: dict | None = None) -> dict:
         context = context or {}

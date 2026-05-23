@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowLeft, ExternalLink, GitBranch, GitCommit, GitPullRequest, History, Send, ShieldAlert } from "lucide-react";
 import { getProjectSummary, JobSnapshot, PipelineSnapshot, Recommendation, Risk } from "@/lib/api";
+import { redirectIfUnauthorized } from "../../authRedirect";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
   const styles = {
@@ -42,6 +43,10 @@ function severityTone(severity: string): "neutral" | "good" | "warn" | "critical
   return "neutral";
 }
 
+function isDemoProject(project: { description: string; project_path: string }) {
+  return project.description.startsWith("Rich demo project") || project.project_path.startsWith("demo/");
+}
+
 function Metric({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "warn" | "critical" }) {
   const color = tone === "critical" ? "text-red-700" : tone === "warn" ? "text-amber-700" : "text-slate-950";
   return (
@@ -52,7 +57,7 @@ function Metric({ label, value, tone = "neutral" }: { label: string; value: numb
   );
 }
 
-function PipelineCard({ pipeline }: { pipeline: PipelineSnapshot }) {
+function PipelineCard({ pipeline, showExternalLinks }: { pipeline: PipelineSnapshot; showExternalLinks: boolean }) {
   return (
     <article className="border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -65,7 +70,7 @@ function PipelineCard({ pipeline }: { pipeline: PipelineSnapshot }) {
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
         <span>{pipeline.sha ? pipeline.sha.slice(0, 8) : "no sha"}</span>
         <span>Updated: {formatDate(pipeline.updated_at_gitlab)}</span>
-        {pipeline.web_url ? (
+        {showExternalLinks && pipeline.web_url ? (
           <a href={pipeline.web_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-teal-700">
             GitLab
             <ExternalLink size={12} />
@@ -76,7 +81,7 @@ function PipelineCard({ pipeline }: { pipeline: PipelineSnapshot }) {
   );
 }
 
-function FailedJobCard({ job }: { job: JobSnapshot }) {
+function FailedJobCard({ job, showExternalLinks }: { job: JobSnapshot; showExternalLinks: boolean }) {
   return (
     <article className="border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -89,7 +94,7 @@ function FailedJobCard({ job }: { job: JobSnapshot }) {
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
         <span>Pipeline #{job.pipeline_id}</span>
         {job.duration ? <span>{Math.round(job.duration)}s</span> : null}
-        {job.web_url ? (
+        {showExternalLinks && job.web_url ? (
           <a href={job.web_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-teal-700">
             Job
             <ExternalLink size={12} />
@@ -180,8 +185,14 @@ function formatDate(value: string | null | undefined) {
 
 export default async function ProjectWorkspacePage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const summary = await getProjectSummary(projectId);
+  let summary;
+  try {
+    summary = await getProjectSummary(projectId);
+  } catch (error) {
+    redirectIfUnauthorized(error);
+  }
   const project = summary.project;
+  const showExternalLinks = Boolean(project.web_url) && !isDemoProject(project);
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
@@ -196,10 +207,11 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold">{project.name}</h1>
                 <Badge label={project.visibility} />
+                {isDemoProject(project) ? <Badge label="demo data" tone="warn" /> : null}
               </div>
               <p className="mt-1 text-sm text-slate-600">{project.project_path}</p>
             </div>
-            {project.web_url ? (
+            {showExternalLinks ? (
               <a href={project.web_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-teal-700">
                 Open in GitLab
                 <ExternalLink size={14} />
@@ -237,7 +249,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
                   <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
                     <span>Author: {mr.author_username || "unknown"}</span>
                     <span>Updated: {formatDate(mr.updated_at_gitlab)}</span>
-                    {mr.web_url ? (
+                    {showExternalLinks && mr.web_url ? (
                       <a href={mr.web_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-teal-700">
                         MR
                         <ExternalLink size={12} />
@@ -257,7 +269,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
             {summary.latest_pipelines.length ? (
               <div className="space-y-3">
                 {summary.latest_pipelines.map((pipeline) => (
-                  <PipelineCard key={pipeline.id} pipeline={pipeline} />
+                  <PipelineCard key={pipeline.id} pipeline={pipeline} showExternalLinks={showExternalLinks} />
                 ))}
               </div>
             ) : (
@@ -269,7 +281,7 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
             {summary.failed_jobs.length ? (
               <div className="space-y-3">
                 {summary.failed_jobs.map((job) => (
-                  <FailedJobCard key={job.id} job={job} />
+                  <FailedJobCard key={job.id} job={job} showExternalLinks={showExternalLinks} />
                 ))}
               </div>
             ) : (

@@ -17,7 +17,11 @@ def main() -> None:
         ("GOOGLE_CLOUD_PROJECT", bool(settings.google_cloud_project), settings.google_cloud_project or "set this for Vertex"),
         ("GOOGLE_CLOUD_LOCATION", bool(settings.google_cloud_location), settings.google_cloud_location),
         ("GITLAB_WEBHOOK_SECRET", bool(settings.gitlab_webhook_secret), "required for real GitLab webhooks"),
-        ("GITLAB_TOKEN", bool(settings.gitlab_token), "required for GitLab API reads/comments"),
+        ("GOOGLE_OAUTH", bool(settings.google_oauth_client_id and settings.google_oauth_client_secret), "required for Google login"),
+        ("GITLAB_OAUTH", bool(settings.gitlab_oauth_client_id and settings.gitlab_oauth_client_secret), "required for per-workspace GitLab sync/actions"),
+        ("SLACK_OAUTH", bool(settings.slack_oauth_client_id and settings.slack_oauth_client_secret), "required for per-workspace Slack installs"),
+        ("OAUTH_TOKEN_ENCRYPTION_KEY", bool(settings.oauth_token_encryption_key), "required for encrypted OAuth tokens in production"),
+        ("GITLAB_TOKEN", bool(settings.gitlab_token), "optional fallback for GitLab API reads/comments"),
         ("SLACK_WEBHOOK_URL", bool(settings.slack_webhook_url), "required for real Slack alerts"),
         ("DRY_RUN_ACTIONS", True, str(settings.dry_run_actions)),
     ]
@@ -44,4 +48,3 @@ def _database_detail(database_url: str) -> str:
 
 if __name__ == "__main__":
     main()
-

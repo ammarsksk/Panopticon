@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthStatus } from "./AuthStatus";
+import { ThemeToggle } from "./ThemeToggle";
 
 export const metadata: Metadata = {
   title: "Panopticon",
@@ -12,9 +14,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <AuthStatus />
+        <ThemeToggle />
+        {children}
+      </body>
     </html>
   );
 }
-

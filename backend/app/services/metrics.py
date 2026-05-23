@@ -13,8 +13,9 @@ SEVERE = {"critical", "high"}
 
 
 class MetricsService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, workspace_id: int | None = None) -> None:
         self.db = db
+        self.workspace_id = workspace_id
 
     def organization_summary(self) -> dict[str, Any]:
         projects = self.project_health(limit=500)
@@ -49,7 +50,10 @@ class MetricsService:
         }
 
     def project_health(self, *, limit: int = 100) -> list[dict[str, Any]]:
-        projects = self.db.scalars(select(models.GitLabProject).order_by(desc(models.GitLabProject.last_activity_at)).limit(limit)).all()
+        stmt = select(models.GitLabProject)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.GitLabProject.workspace_id == self.workspace_id)
+        projects = self.db.scalars(stmt.order_by(desc(models.GitLabProject.last_activity_at)).limit(limit)).all()
         return sorted([self._project_health(project) for project in projects], key=lambda item: item["health_score"])
 
     def refresh_snapshots(self, *, snapshot_date: date | None = None) -> list[models.EngineeringMetricSnapshot]:
@@ -72,6 +76,8 @@ class MetricsService:
 
     def list_snapshots(self, *, project_path: str = "", limit: int = 100) -> list[models.EngineeringMetricSnapshot]:
         stmt = select(models.EngineeringMetricSnapshot)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.EngineeringMetricSnapshot.workspace_id == self.workspace_id)
         if project_path:
             stmt = stmt.where(models.EngineeringMetricSnapshot.project_path == project_path)
         return self.db.scalars(stmt.order_by(desc(models.EngineeringMetricSnapshot.snapshot_date), desc(models.EngineeringMetricSnapshot.updated_at)).limit(limit)).all()
@@ -148,9 +154,18 @@ class MetricsService:
             .where(models.EngineeringMetricSnapshot.project_path == project_path)
             .where(models.EngineeringMetricSnapshot.snapshot_date == snapshot_date)
         )
+        if self.workspace_id is not None:
+            snapshot = self.db.scalar(
+                select(models.EngineeringMetricSnapshot)
+                .where(models.EngineeringMetricSnapshot.scope_type == scope_type)
+                .where(models.EngineeringMetricSnapshot.project_path == project_path)
+                .where(models.EngineeringMetricSnapshot.snapshot_date == snapshot_date)
+                .where(models.EngineeringMetricSnapshot.workspace_id == self.workspace_id)
+            )
         if not snapshot:
-            snapshot = models.EngineeringMetricSnapshot(scope_type=scope_type, project_path=project_path, snapshot_date=snapshot_date)
+            snapshot = models.EngineeringMetricSnapshot(scope_type=scope_type, project_path=project_path, snapshot_date=snapshot_date, workspace_id=self.workspace_id)
             self.db.add(snapshot)
+        snapshot.workspace_id = self.workspace_id
         snapshot.health_score = health_score
         snapshot.metrics = _jsonable(metrics)
         snapshot.updated_at = _now()
@@ -158,7 +173,10 @@ class MetricsService:
         return snapshot
 
     def _records(self, model, project_path: str, order_by, limit: int):
-        return self.db.scalars(select(model).where(model.project_path == project_path).order_by(order_by).limit(limit)).all()
+        stmt = select(model).where(model.project_path == project_path)
+        if self.workspace_id is not None and hasattr(model, "workspace_id"):
+            stmt = stmt.where(model.workspace_id == self.workspace_id)
+        return self.db.scalars(stmt.order_by(order_by).limit(limit)).all()
 
 
 def _health_score(

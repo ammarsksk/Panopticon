@@ -4,6 +4,49 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class UserOut(BaseModel):
+    id: int
+    email: str
+    name: str
+    is_active: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceOut(BaseModel):
+    id: int
+    name: str
+    slug: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuthRequestIn(BaseModel):
+    email: str
+    password: str
+    name: str = ""
+    workspace_name: str = ""
+
+
+class AuthSessionOut(BaseModel):
+    user: UserOut
+    workspace: WorkspaceOut
+    role: str
+    auth_required: bool = False
+
+
+class OAuthIntegrationStatusOut(BaseModel):
+    provider: str
+    configured: bool
+    connected: bool
+    account_label: str = ""
+    scopes: list[str] = Field(default_factory=list)
+    expires_at: datetime | None = None
+    base_url: str = ""
+
+
 class OperationalEventOut(BaseModel):
     id: int
     provider: str

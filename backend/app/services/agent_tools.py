@@ -15,8 +15,9 @@ from app.services.observability import ObservabilityService
 class AgentToolService:
     """Tool boundary used by chat and the MCP-compatible endpoint."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, workspace_id: int | None = None) -> None:
         self.db = db
+        self.workspace_id = workspace_id
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -143,7 +144,7 @@ class AgentToolService:
         if name == "prepare_actions":
             return self.prepare_actions(project=project, limit=limit)
         if name == "create_fix_plan":
-            plan = FixPlanService(self.db).create(
+            plan = FixPlanService(self.db, workspace_id=self.workspace_id).create(
                 project_id=project.id if project else None,
                 project_path=str(args.get("project_path") or ""),
                 source_type=str(args.get("source_type") or ""),
@@ -161,16 +162,20 @@ class AgentToolService:
             if project and not raw.get("project_path"):
                 raw["project_path"] = project.project_path
             event, correlation, deduplicated = ObservabilityService(self.db).ingest(raw, provider=str(args.get("provider") or "generic"))
+            for record in (event, correlation):
+                if record and self.workspace_id is not None:
+                    record.workspace_id = self.workspace_id
+            self.db.flush()
             return {
                 "event": _record("observability_events", event),
                 "correlation": _record("incident_correlations", correlation) if correlation else None,
                 "deduplicated": deduplicated,
             }
         if name == "get_metrics_context":
-            service = MetricsService(self.db)
+            service = MetricsService(self.db, workspace_id=self.workspace_id)
             return {"summary": service.organization_summary(), "projects": service.project_health(limit=limit)}
         if name == "refresh_metric_snapshots":
-            snapshots = MetricsService(self.db).refresh_snapshots()
+            snapshots = MetricsService(self.db, workspace_id=self.workspace_id).refresh_snapshots()
             return {"snapshots": [_record("engineering_metric_snapshots", item) for item in snapshots]}
         raise LookupError(f"Unknown tool: {name}")
 
@@ -195,7 +200,10 @@ class AgentToolService:
 
     def infer_project(self, message: str) -> models.GitLabProject | None:
         text = message.lower()
-        projects = self.db.scalars(select(models.GitLabProject).order_by(desc(models.GitLabProject.last_activity_at)).limit(200)).all()
+        stmt = select(models.GitLabProject)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.GitLabProject.workspace_id == self.workspace_id)
+        projects = self.db.scalars(stmt.order_by(desc(models.GitLabProject.last_activity_at)).limit(200)).all()
         matches: list[tuple[int, models.GitLabProject]] = []
         for project in projects:
             tokens = {project.project_path.lower(), project.name.lower(), project.namespace.lower()}
@@ -274,11 +282,11 @@ class AgentToolService:
         }
 
     def priority_context(self, *, limit: int = 10) -> dict[str, Any]:
-        risks = self.db.scalars(select(models.RiskAssessment).order_by(desc(models.RiskAssessment.score), desc(models.RiskAssessment.created_at)).limit(limit)).all()
-        failures = self.db.scalars(select(models.PipelineInsight).where(models.PipelineInsight.status == "failed").order_by(desc(models.PipelineInsight.created_at)).limit(limit)).all()
-        jobs = self.db.scalars(select(models.JobSnapshot).where(models.JobSnapshot.status == "failed").order_by(desc(models.JobSnapshot.synced_at)).limit(limit)).all()
-        incidents = self.db.scalars(select(models.IncidentRecord).where(models.IncidentRecord.status == "open").order_by(desc(models.IncidentRecord.created_at)).limit(limit)).all()
-        actions = self.db.scalars(select(models.AgentAction).where(models.AgentAction.status == "pending_approval").order_by(desc(models.AgentAction.updated_at)).limit(limit)).all()
+        risks = self.db.scalars(self._scoped(select(models.RiskAssessment), models.RiskAssessment).order_by(desc(models.RiskAssessment.score), desc(models.RiskAssessment.created_at)).limit(limit)).all()
+        failures = self.db.scalars(self._scoped(select(models.PipelineInsight).where(models.PipelineInsight.status == "failed"), models.PipelineInsight).order_by(desc(models.PipelineInsight.created_at)).limit(limit)).all()
+        jobs = self.db.scalars(self._scoped(select(models.JobSnapshot).where(models.JobSnapshot.status == "failed"), models.JobSnapshot).order_by(desc(models.JobSnapshot.synced_at)).limit(limit)).all()
+        incidents = self.db.scalars(self._scoped(select(models.IncidentRecord).where(models.IncidentRecord.status == "open"), models.IncidentRecord).order_by(desc(models.IncidentRecord.created_at)).limit(limit)).all()
+        actions = self.db.scalars(self._scoped(select(models.AgentAction).where(models.AgentAction.status == "pending_approval"), models.AgentAction).order_by(desc(models.AgentAction.updated_at)).limit(limit)).all()
         return {
             "risks": [_record("risks", item) for item in risks],
             "pipeline_insights": [_record("pipeline_insights", item) for item in failures],
@@ -293,10 +301,12 @@ class AgentToolService:
 
     def prepare_action_records(self, *, project: models.GitLabProject | None, limit: int = 10) -> list[models.AgentAction]:
         stmt = select(models.Recommendation).where(models.Recommendation.channel.in_(["gitlab_comment", "slack"]))
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.Recommendation.workspace_id == self.workspace_id)
         if project:
             stmt = stmt.where(models.Recommendation.project_path == project.project_path)
         recommendations = self.db.scalars(stmt.order_by(desc(models.Recommendation.created_at)).limit(limit)).all()
-        service = AgentActionService(self.db)
+        service = AgentActionService(self.db, workspace_id=self.workspace_id)
         actions = [service.propose(recommendation) for recommendation in recommendations]
         self.db.flush()
         return actions
@@ -305,40 +315,50 @@ class AgentToolService:
         project_id = args.get("project_id")
         if project_id:
             project = self.db.get(models.GitLabProject, int(project_id))
-            if not project:
+            if not project or (self.workspace_id is not None and project.workspace_id != self.workspace_id):
                 raise LookupError(f"Project not found: {project_id}")
             return project
         project_path = str(args.get("project_path") or "").strip()
         if project_path:
-            project = self.db.scalar(select(models.GitLabProject).where(models.GitLabProject.project_path == project_path))
+            stmt = select(models.GitLabProject).where(models.GitLabProject.project_path == project_path)
+            if self.workspace_id is not None:
+                stmt = stmt.where(models.GitLabProject.workspace_id == self.workspace_id)
+            project = self.db.scalar(stmt)
             if not project:
                 raise LookupError(f"Project not found: {project_path}")
             return project
         return None
 
     def _search_projects(self, query: str, limit: int) -> list[models.GitLabProject]:
-        stmt = select(models.GitLabProject).order_by(desc(models.GitLabProject.last_activity_at)).limit(limit)
+        stmt = select(models.GitLabProject)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.GitLabProject.workspace_id == self.workspace_id)
+        stmt = stmt.order_by(desc(models.GitLabProject.last_activity_at)).limit(limit)
         if query:
             like = f"%{query.lower()}%"
-            stmt = (
-                select(models.GitLabProject)
-                .where(
-                    models.GitLabProject.project_path.ilike(like)
-                    | models.GitLabProject.name.ilike(like)
-                    | models.GitLabProject.namespace.ilike(like)
-                )
-                .order_by(desc(models.GitLabProject.last_activity_at))
-                .limit(limit)
+            stmt = select(models.GitLabProject).where(
+                models.GitLabProject.project_path.ilike(like)
+                | models.GitLabProject.name.ilike(like)
+                | models.GitLabProject.namespace.ilike(like)
             )
+            if self.workspace_id is not None:
+                stmt = stmt.where(models.GitLabProject.workspace_id == self.workspace_id)
+            stmt = stmt.order_by(desc(models.GitLabProject.last_activity_at)).limit(limit)
         return self.db.scalars(stmt).all()
 
     def _records(self, model, project_path: str | None, order_by, limit: int, *filters) -> list[Any]:
         stmt = select(model)
+        stmt = self._scoped(stmt, model)
         if project_path and hasattr(model, "project_path"):
             stmt = stmt.where(model.project_path == project_path)
         for filter_expr in filters:
             stmt = stmt.where(filter_expr)
         return self.db.scalars(stmt.order_by(order_by).limit(limit)).all()
+
+    def _scoped(self, stmt, model):
+        if self.workspace_id is not None and hasattr(model, "workspace_id"):
+            return stmt.where(model.workspace_id == self.workspace_id)
+        return stmt
 
 
 def mcp_text_result(result: dict[str, Any]) -> dict[str, Any]:

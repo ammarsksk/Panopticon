@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, ClipboardCheck, FileText, History, ShieldCheck } from "lucide-react";
 import { AgentAction, getAgentActions } from "@/lib/api";
+import { redirectIfUnauthorized } from "../authRedirect";
 import { ActionControls, PrepareActionsButton } from "./ActionControls";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
@@ -62,7 +63,12 @@ function ActionCard({ action }: { action: AgentAction }) {
 }
 
 export default async function ActionsPage() {
-  const actions = await getAgentActions();
+  let actions;
+  try {
+    actions = await getAgentActions();
+  } catch (error) {
+    redirectIfUnauthorized(error);
+  }
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">

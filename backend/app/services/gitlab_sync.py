@@ -8,18 +8,19 @@ from app.integrations.gitlab import GitLabClient
 
 
 class GitLabProjectSyncService:
-    def __init__(self, db: Session, client: GitLabClient | None = None) -> None:
+    def __init__(self, db: Session, client: GitLabClient | None = None, workspace_id: int | None = None) -> None:
         self.db = db
         self.client = client or GitLabClient()
+        self.workspace_id = workspace_id
 
     def sync(self, *, limit: int = 50, merge_request_limit: int = 20, pipeline_limit: int = 10, job_limit: int = 20) -> models.ProjectSyncRun:
-        run = models.ProjectSyncRun(status="running")
+        run = models.ProjectSyncRun(status="running", workspace_id=self.workspace_id)
         self.db.add(run)
         self.db.flush()
 
         try:
             if not self.client.configured:
-                raise RuntimeError("GITLAB_TOKEN is not configured")
+                raise RuntimeError("GitLab is not connected. Configure GitLab OAuth or GITLAB_TOKEN.")
 
             projects = self.client.list_projects(limit=limit)
             run.projects_seen = len(projects)
@@ -75,13 +76,20 @@ class GitLabProjectSyncService:
     def _upsert_project(self, item: dict) -> models.GitLabProject:
         gitlab_project_id = str(item.get("id") or "")
         project_path = str(item.get("path_with_namespace") or "")
-        project = self.db.scalar(select(models.GitLabProject).where(models.GitLabProject.gitlab_project_id == gitlab_project_id))
+        stmt = select(models.GitLabProject).where(models.GitLabProject.gitlab_project_id == gitlab_project_id)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.GitLabProject.workspace_id == self.workspace_id)
+        project = self.db.scalar(stmt)
         if not project:
-            project = self.db.scalar(select(models.GitLabProject).where(models.GitLabProject.project_path == project_path))
+            stmt = select(models.GitLabProject).where(models.GitLabProject.project_path == project_path)
+            if self.workspace_id is not None:
+                stmt = stmt.where(models.GitLabProject.workspace_id == self.workspace_id)
+            project = self.db.scalar(stmt)
         if not project:
-            project = models.GitLabProject(gitlab_project_id=gitlab_project_id, project_path=project_path)
+            project = models.GitLabProject(gitlab_project_id=gitlab_project_id, project_path=project_path, workspace_id=self.workspace_id)
             self.db.add(project)
 
+        project.workspace_id = self.workspace_id
         namespace = item.get("namespace") or {}
         project.gitlab_project_id = gitlab_project_id
         project.project_path = project_path
@@ -101,15 +109,18 @@ class GitLabProjectSyncService:
             select(models.MergeRequestSnapshot)
             .where(models.MergeRequestSnapshot.gitlab_project_id == project.gitlab_project_id)
             .where(models.MergeRequestSnapshot.merge_request_iid == merge_request_iid)
+            .where(models.MergeRequestSnapshot.workspace_id == project.workspace_id)
         )
         if not snapshot:
             snapshot = models.MergeRequestSnapshot(
                 gitlab_project_id=project.gitlab_project_id,
                 project_path=project.project_path,
                 merge_request_iid=merge_request_iid,
+                workspace_id=project.workspace_id,
             )
             self.db.add(snapshot)
 
+        snapshot.workspace_id = project.workspace_id
         author = item.get("author") or {}
         snapshot.project_path = project.project_path
         snapshot.title = str(item.get("title") or "")
@@ -131,15 +142,18 @@ class GitLabProjectSyncService:
             select(models.PipelineSnapshot)
             .where(models.PipelineSnapshot.gitlab_project_id == project.gitlab_project_id)
             .where(models.PipelineSnapshot.pipeline_id == pipeline_id)
+            .where(models.PipelineSnapshot.workspace_id == project.workspace_id)
         )
         if not snapshot:
             snapshot = models.PipelineSnapshot(
                 gitlab_project_id=project.gitlab_project_id,
                 project_path=project.project_path,
                 pipeline_id=pipeline_id,
+                workspace_id=project.workspace_id,
             )
             self.db.add(snapshot)
 
+        snapshot.workspace_id = project.workspace_id
         snapshot.project_path = project.project_path
         snapshot.status = str(item.get("status") or "")
         snapshot.ref = str(item.get("ref") or "")
@@ -157,6 +171,7 @@ class GitLabProjectSyncService:
             select(models.JobSnapshot)
             .where(models.JobSnapshot.gitlab_project_id == project.gitlab_project_id)
             .where(models.JobSnapshot.job_id == job_id)
+            .where(models.JobSnapshot.workspace_id == project.workspace_id)
         )
         if not snapshot:
             snapshot = models.JobSnapshot(
@@ -164,9 +179,11 @@ class GitLabProjectSyncService:
                 project_path=project.project_path,
                 pipeline_id=pipeline.pipeline_id,
                 job_id=job_id,
+                workspace_id=project.workspace_id,
             )
             self.db.add(snapshot)
 
+        snapshot.workspace_id = project.workspace_id
         snapshot.project_path = project.project_path
         snapshot.pipeline_id = pipeline.pipeline_id
         snapshot.name = str(item.get("name") or "")

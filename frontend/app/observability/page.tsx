@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowLeft, Gauge, RadioTower } from "lucide-react";
 import { getObservabilityData, IncidentCorrelation, ObservabilityEvent } from "@/lib/api";
+import { redirectIfUnauthorized } from "../authRedirect";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
   const styles = {
@@ -119,7 +120,13 @@ function EventCard({ event }: { event: ObservabilityEvent }) {
 }
 
 export default async function ObservabilityPage() {
-  const { events, correlations, projects } = await getObservabilityData();
+  let data;
+  try {
+    data = await getObservabilityData();
+  } catch (error) {
+    redirectIfUnauthorized(error);
+  }
+  const { events, correlations, projects } = data;
   const critical = correlations.filter((item) => ["critical", "high"].includes(item.severity)).length;
   const unmapped = events.filter((item) => !item.project_path).length;
 

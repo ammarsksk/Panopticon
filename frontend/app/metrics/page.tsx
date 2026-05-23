@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Activity, ArrowLeft, BarChart3, CircleDot, GitPullRequest, ShieldAlert, TrendingUp } from "lucide-react";
 import { getMetricsData, MetricSnapshot, ProjectHealth } from "@/lib/api";
+import { redirectIfUnauthorized } from "../authRedirect";
 import { RefreshMetricsButton } from "./RefreshMetricsButton";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
@@ -111,7 +112,13 @@ function SnapshotList({ snapshots }: { snapshots: MetricSnapshot[] }) {
 }
 
 export default async function MetricsPage() {
-  const { summary, projects, snapshots } = await getMetricsData();
+  let data;
+  try {
+    data = await getMetricsData();
+  } catch (error) {
+    redirectIfUnauthorized(error);
+  }
+  const { summary, projects, snapshots } = data;
   const atRisk = summary.projects_at_risk;
   const failedRate = formatPercent(summary.failed_pipeline_rate);
 

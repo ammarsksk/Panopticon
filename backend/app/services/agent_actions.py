@@ -11,22 +11,24 @@ EXECUTABLE_CHANNELS = {"gitlab_comment", "slack"}
 
 
 class AgentActionService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, workspace_id: int | None = None) -> None:
         self.db = db
+        self.workspace_id = workspace_id
 
     def propose_from_recommendations(self, *, limit: int = 50) -> list[models.AgentAction]:
-        recommendations = self.db.scalars(
-            select(models.Recommendation)
-            .where(models.Recommendation.channel.in_(EXECUTABLE_CHANNELS))
-            .order_by(desc(models.Recommendation.created_at))
-            .limit(limit)
-        ).all()
+        stmt = select(models.Recommendation).where(models.Recommendation.channel.in_(EXECUTABLE_CHANNELS))
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.Recommendation.workspace_id == self.workspace_id)
+        recommendations = self.db.scalars(stmt.order_by(desc(models.Recommendation.created_at)).limit(limit)).all()
         actions = [self.propose(recommendation) for recommendation in recommendations]
         self.db.commit()
         return actions
 
     def propose(self, recommendation: models.Recommendation) -> models.AgentAction:
-        existing = self.db.scalar(select(models.AgentAction).where(models.AgentAction.recommendation_id == recommendation.id))
+        stmt = select(models.AgentAction).where(models.AgentAction.recommendation_id == recommendation.id)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.AgentAction.workspace_id == self.workspace_id)
+        existing = self.db.scalar(stmt)
         if existing:
             return existing
 
@@ -34,6 +36,7 @@ class AgentActionService:
         context = self._execution_context(recommendation)
         action = models.AgentAction(
             recommendation_id=recommendation.id,
+            workspace_id=recommendation.workspace_id or self.workspace_id,
             project_path=recommendation.project_path,
             action_type=action_type,
             channel=recommendation.channel,
@@ -82,7 +85,7 @@ class AgentActionService:
         action.updated_at = _now()
         self.db.flush()
 
-        result = ActionDispatcher(self.db).dispatch(recommendation, action.execution_context)
+        result = ActionDispatcher(self.db, workspace_id=self.workspace_id).dispatch(recommendation, action.execution_context)
         action.last_result = result
         action.status = str(result.get("status", "sent"))
         action.error = str(result.get("error", ""))
@@ -92,13 +95,14 @@ class AgentActionService:
 
     def get(self, action_id: int) -> models.AgentAction:
         action = self.db.get(models.AgentAction, action_id)
-        if not action:
+        if not action or (self.workspace_id is not None and action.workspace_id != self.workspace_id):
             raise LookupError("Action not found")
         return action
 
     def _record_decision(self, action: models.AgentAction, *, decision: str, actor: str, reason: str) -> models.ActionApproval:
         approval = models.ActionApproval(
             agent_action_id=action.id,
+            workspace_id=action.workspace_id or self.workspace_id,
             decision=decision,
             actor=actor or "local_user",
             reason=reason,

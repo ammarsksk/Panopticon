@@ -14,6 +14,7 @@ class OperationalEvent(Base):
     __tablename__ = "operational_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     provider: Mapped[str] = mapped_column(String(40), default="gitlab", index=True)
     event_type: Mapped[str] = mapped_column(String(80), index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
@@ -31,6 +32,7 @@ class WebhookReceipt(Base):
     __tablename__ = "webhook_receipts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     provider: Mapped[str] = mapped_column(String(40), default="gitlab", index=True)
     event_uid: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     event_type: Mapped[str] = mapped_column(String(80), default="", index=True)
@@ -40,12 +42,102 @@ class WebhookReceipt(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    password_hash: Mapped[str] = mapped_column(String(500), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class WorkspaceMember(Base):
+    __tablename__ = "workspace_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    role: Mapped[str] = mapped_column(String(40), default="owner", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class OAuthState(Base):
+    __tablename__ = "oauth_states"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    provider: Mapped[str] = mapped_column(String(40), index=True)
+    state_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    redirect_after: Mapped[str] = mapped_column(String(500), default="/")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class OAuthConnection(Base):
+    __tablename__ = "oauth_connections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    provider: Mapped[str] = mapped_column(String(40), index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    provider_user_id: Mapped[str] = mapped_column(String(160), default="", index=True)
+    account_label: Mapped[str] = mapped_column(String(255), default="")
+    access_token_encrypted: Mapped[str] = mapped_column(Text, default="")
+    refresh_token_encrypted: Mapped[str] = mapped_column(Text, default="")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scopes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(120), index=True)
+    target_type: Mapped[str] = mapped_column(String(120), default="")
+    target_id: Mapped[str] = mapped_column(String(120), default="")
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
 class GitLabProject(Base):
     __tablename__ = "gitlab_projects"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    gitlab_project_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
-    project_path: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    gitlab_project_id: Mapped[str] = mapped_column(String(80), index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
     name: Mapped[str] = mapped_column(String(255), default="")
     namespace: Mapped[str] = mapped_column(String(255), default="")
     web_url: Mapped[str] = mapped_column(String(500), default="")
@@ -64,6 +156,7 @@ class ProjectSyncRun(Base):
     __tablename__ = "project_sync_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     provider: Mapped[str] = mapped_column(String(40), default="gitlab", index=True)
     status: Mapped[str] = mapped_column(String(40), default="running", index=True)
     projects_seen: Mapped[int] = mapped_column(Integer, default=0)
@@ -80,6 +173,7 @@ class MergeRequestSnapshot(Base):
     __tablename__ = "merge_request_snapshots"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     gitlab_project_id: Mapped[str] = mapped_column(String(80), index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     merge_request_iid: Mapped[str] = mapped_column(String(80), index=True)
@@ -99,6 +193,7 @@ class PipelineSnapshot(Base):
     __tablename__ = "pipeline_snapshots"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     gitlab_project_id: Mapped[str] = mapped_column(String(80), index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     pipeline_id: Mapped[str] = mapped_column(String(80), index=True)
@@ -115,6 +210,7 @@ class JobSnapshot(Base):
     __tablename__ = "job_snapshots"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     gitlab_project_id: Mapped[str] = mapped_column(String(80), index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     pipeline_id: Mapped[str] = mapped_column(String(80), index=True)
@@ -133,6 +229,7 @@ class RiskAssessment(Base):
     __tablename__ = "risk_assessments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     event_id: Mapped[int | None] = mapped_column(ForeignKey("operational_events.id"), nullable=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     merge_request_iid: Mapped[str] = mapped_column(String(80), default="")
@@ -151,6 +248,7 @@ class PipelineInsight(Base):
     __tablename__ = "pipeline_insights"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     event_id: Mapped[int | None] = mapped_column(ForeignKey("operational_events.id"), nullable=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     pipeline_id: Mapped[str] = mapped_column(String(80), default="", index=True)
@@ -167,6 +265,7 @@ class MergeRequestSignal(Base):
     __tablename__ = "merge_request_signals"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     merge_request_iid: Mapped[str] = mapped_column(String(80), index=True)
     title: Mapped[str] = mapped_column(String(255), default="")
@@ -183,6 +282,7 @@ class IncidentRecord(Base):
     __tablename__ = "incident_records"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     event_id: Mapped[int | None] = mapped_column(ForeignKey("operational_events.id"), nullable=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     title: Mapped[str] = mapped_column(String(255))
@@ -200,6 +300,7 @@ class ObservabilityEvent(Base):
     __tablename__ = "observability_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     provider: Mapped[str] = mapped_column(String(80), default="generic", index=True)
     event_uid: Mapped[str] = mapped_column(String(160), unique=True, index=True)
     project_path: Mapped[str] = mapped_column(String(255), default="", index=True)
@@ -221,6 +322,7 @@ class IncidentCorrelation(Base):
     __tablename__ = "incident_correlations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     title: Mapped[str] = mapped_column(String(255), default="")
     severity: Mapped[str] = mapped_column(String(40), default="info", index=True)
@@ -242,6 +344,7 @@ class EngineeringMetricSnapshot(Base):
     __tablename__ = "engineering_metric_snapshots"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     scope_type: Mapped[str] = mapped_column(String(40), default="project", index=True)
     project_path: Mapped[str] = mapped_column(String(255), default="", index=True)
     snapshot_date: Mapped[date] = mapped_column(Date, index=True)
@@ -255,6 +358,7 @@ class Recommendation(Base):
     __tablename__ = "recommendations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     source_type: Mapped[str] = mapped_column(String(80), index=True)
     source_id: Mapped[str] = mapped_column(String(80), default="")
@@ -268,6 +372,7 @@ class ActionDispatch(Base):
     __tablename__ = "action_dispatches"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     recommendation_id: Mapped[int | None] = mapped_column(ForeignKey("recommendations.id"), nullable=True, index=True)
     channel: Mapped[str] = mapped_column(String(80), index=True)
     status: Mapped[str] = mapped_column(String(40), index=True)
@@ -282,6 +387,7 @@ class AgentAction(Base):
     __tablename__ = "agent_actions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     recommendation_id: Mapped[int | None] = mapped_column(ForeignKey("recommendations.id"), nullable=True, index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     action_type: Mapped[str] = mapped_column(String(80), index=True)
@@ -302,6 +408,7 @@ class ActionApproval(Base):
     __tablename__ = "action_approvals"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     agent_action_id: Mapped[int] = mapped_column(ForeignKey("agent_actions.id"), index=True)
     decision: Mapped[str] = mapped_column(String(40), index=True)
     actor: Mapped[str] = mapped_column(String(120), default="local_user")
@@ -313,6 +420,7 @@ class FixPlan(Base):
     __tablename__ = "fix_plans"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("gitlab_projects.id"), nullable=True, index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     source_type: Mapped[str] = mapped_column(String(80), default="", index=True)
@@ -337,6 +445,7 @@ class FixPlanApproval(Base):
     __tablename__ = "fix_plan_approvals"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     fix_plan_id: Mapped[int] = mapped_column(ForeignKey("fix_plans.id"), index=True)
     decision: Mapped[str] = mapped_column(String(40), index=True)
     actor: Mapped[str] = mapped_column(String(120), default="local_user")
@@ -348,6 +457,7 @@ class ChatThread(Base):
     __tablename__ = "chat_threads"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("gitlab_projects.id"), nullable=True, index=True)
     project_path: Mapped[str] = mapped_column(String(255), default="", index=True)
     title: Mapped[str] = mapped_column(String(255), default="")
@@ -359,6 +469,7 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     thread_id: Mapped[int] = mapped_column(ForeignKey("chat_threads.id"), index=True)
     role: Mapped[str] = mapped_column(String(40), index=True)
     content: Mapped[str] = mapped_column(Text)
@@ -371,6 +482,7 @@ class MemoryRecord(Base):
     __tablename__ = "memory_records"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
     project_path: Mapped[str] = mapped_column(String(255), index=True)
     memory_type: Mapped[str] = mapped_column(String(80), index=True)
     signature: Mapped[str] = mapped_column(String(255), index=True)

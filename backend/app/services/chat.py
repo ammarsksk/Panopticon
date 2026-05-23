@@ -8,10 +8,11 @@ from app.services.agent_tools import AgentToolService
 
 
 class ChatService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, workspace_id: int | None = None) -> None:
         self.db = db
+        self.workspace_id = workspace_id
         self.reasoner = GeminiReasoner()
-        self.tools = AgentToolService(db)
+        self.tools = AgentToolService(db, workspace_id=workspace_id)
 
     def answer(self, *, message: str, project_id: int | None = None, thread_id: int | None = None) -> dict:
         project = self._project(project_id) or self.tools.infer_project(message)
@@ -52,13 +53,18 @@ class ChatService:
     def _project(self, project_id: int | None) -> models.GitLabProject | None:
         if project_id is None:
             return None
-        return self.db.get(models.GitLabProject, project_id)
+        project = self.db.get(models.GitLabProject, project_id)
+        if project and self.workspace_id is not None and project.workspace_id != self.workspace_id:
+            return None
+        return project
 
     def _thread(self, *, message: str, project: models.GitLabProject | None, thread_id: int | None) -> models.ChatThread:
         if thread_id:
             existing = self.db.get(models.ChatThread, thread_id)
             if existing:
-                if project and existing.project_id != project.id:
+                if self.workspace_id is not None and existing.workspace_id != self.workspace_id:
+                    existing = None
+                elif project and existing.project_id != project.id:
                     existing = None
                 elif project is None and existing.project_id is not None:
                     existing = None
@@ -67,6 +73,7 @@ class ChatService:
         title = message.strip().replace("\n", " ")[:80] or "Panopticon chat"
         thread = models.ChatThread(
             project_id=project.id if project else None,
+            workspace_id=self.workspace_id,
             project_path=project.project_path if project else "",
             title=title,
         )
@@ -85,6 +92,7 @@ class ChatService:
     ) -> models.ChatMessage:
         message = models.ChatMessage(
             thread_id=thread.id,
+            workspace_id=thread.workspace_id or self.workspace_id,
             role=role,
             content=content,
             citations=citations or [],

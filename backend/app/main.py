@@ -4,6 +4,7 @@ import re
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -16,11 +17,13 @@ from app.integrations.slack import parse_slack_form, verified_slack_body
 from app.memory.repository import OperationalMemory
 from app.services.agent_actions import AgentActionService
 from app.services.agent_tools import AgentToolService, mcp_text_result
+from app.services.auth import AuthService, RequestContext, assign_workspace, clear_session_cookie, get_current_context, set_session_cookie, workspace_filter
 from app.services.chat import ChatService
 from app.services.fix_plans import FixPlanService
 from app.services.gitlab_sync import GitLabProjectSyncService
 from app.services.metrics import MetricsService
 from app.services.observability import ObservabilityService
+from app.services.oauth import OAuthService, gitlab_client_for_workspace
 from app.services.slack_app import SlackAppService, parse_interaction_payload
 
 settings = get_settings()
@@ -48,11 +51,101 @@ def health() -> dict:
     return {"status": "ok", "service": settings.app_name, "environment": settings.app_env}
 
 
+@app.get("/api/auth/me", response_model=schemas.AuthSessionOut)
+def auth_me(context: RequestContext = Depends(get_current_context)) -> dict:
+    return {"user": context.user, "workspace": context.workspace, "role": context.role, "auth_required": settings.auth_required}
+
+
+@app.post("/api/auth/signup", response_model=schemas.AuthSessionOut)
+def auth_signup(request: schemas.AuthRequestIn, response: Response, db: Session = Depends(get_db)) -> dict:
+    try:
+        session, token = AuthService(db).signup(email=request.email, password=request.password, name=request.name, workspace_name=request.workspace_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    set_session_cookie(response, token)
+    user = db.get(models.User, session.user_id)
+    workspace = db.get(models.Workspace, session.workspace_id)
+    return {"user": user, "workspace": workspace, "role": "owner", "auth_required": settings.auth_required}
+
+
+@app.post("/api/auth/login", response_model=schemas.AuthSessionOut)
+def auth_login(request: schemas.AuthRequestIn, response: Response, db: Session = Depends(get_db)) -> dict:
+    try:
+        session, token = AuthService(db).login(email=request.email, password=request.password)
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from None
+    set_session_cookie(response, token)
+    user = db.get(models.User, session.user_id)
+    workspace = db.get(models.Workspace, session.workspace_id)
+    membership = db.scalar(
+        select(models.WorkspaceMember)
+        .where(models.WorkspaceMember.user_id == user.id)
+        .where(models.WorkspaceMember.workspace_id == workspace.id)
+    )
+    return {"user": user, "workspace": workspace, "role": membership.role if membership else "viewer", "auth_required": settings.auth_required}
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
+    AuthService(db).logout(request.cookies.get(settings.session_cookie_name))
+    clear_session_cookie(response)
+    return {"status": "logged_out"}
+
+
+@app.get("/api/auth/google/start")
+def google_oauth_start(db: Session = Depends(get_db), redirect_after: str = "/"):
+    try:
+        url = OAuthService(db).google_auth_url(redirect_after=redirect_after)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+    return RedirectResponse(url)
+
+
+@app.get("/api/auth/google/callback")
+def google_oauth_callback(code: str = "", state: str = "", db: Session = Depends(get_db)):
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing OAuth callback code or state")
+    try:
+        result = OAuthService(db).complete_google_callback(code=code, state=state)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Google OAuth failed: {exc}") from None
+    response = RedirectResponse(f"{settings.app_public_url.rstrip('/')}{result.redirect_url}")
+    if result.session_token:
+        set_session_cookie(response, result.session_token)
+    return response
+
+
+@app.get("/api/integrations/gitlab/status", response_model=schemas.OAuthIntegrationStatusOut)
+def gitlab_oauth_status(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)) -> dict:
+    return OAuthService(db).gitlab_status(workspace_id=context.workspace.id)
+
+
+@app.get("/api/integrations/gitlab/connect")
+def gitlab_oauth_connect(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), redirect_after: str = "/projects"):
+    try:
+        url = OAuthService(db).gitlab_auth_url(user_id=context.user.id, workspace_id=context.workspace.id, redirect_after=redirect_after)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+    return RedirectResponse(url)
+
+
+@app.get("/api/integrations/gitlab/callback")
+def gitlab_oauth_callback(code: str = "", state: str = "", db: Session = Depends(get_db)):
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing OAuth callback code or state")
+    try:
+        result = OAuthService(db).complete_gitlab_callback(code=code, state=state)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"GitLab OAuth failed: {exc}") from None
+    return RedirectResponse(f"{settings.app_public_url.rstrip('/')}{result.redirect_url}")
+
+
 @app.post("/webhooks/gitlab")
-async def gitlab_webhook(request: Request, db: Session = Depends(get_db)) -> dict:
+async def gitlab_webhook(request: Request, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)) -> dict:
     verify_gitlab_webhook(request)
     payload = await request.json()
     created = process_gitlab_event(payload, db, event_uid=_event_uid(request, payload))
+    _attach_created_records(db, context.workspace.id)
     return {"status": "accepted", "created": created}
 
 
@@ -69,73 +162,93 @@ def _event_uid(request: Request, payload: dict) -> str:
 
 
 @app.get("/api/events", response_model=list[schemas.OperationalEventOut])
-def list_events(db: Session = Depends(get_db), limit: int = 50):
-    return db.scalars(select(models.OperationalEvent).order_by(desc(models.OperationalEvent.created_at)).limit(limit)).all()
+def list_events(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    return db.scalars(
+        select(models.OperationalEvent)
+        .where(workspace_filter(models.OperationalEvent, context.workspace.id))
+        .order_by(desc(models.OperationalEvent.created_at))
+        .limit(limit)
+    ).all()
 
 
 @app.post("/api/gitlab/projects/sync", response_model=schemas.ProjectSyncRunOut)
-def sync_gitlab_projects(db: Session = Depends(get_db), limit: int = 50):
+def sync_gitlab_projects(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
     capped_limit = max(1, min(limit, 100))
-    return GitLabProjectSyncService(db).sync(limit=capped_limit)
+    client = gitlab_client_for_workspace(db, context.workspace.id)
+    return GitLabProjectSyncService(db, client=client, workspace_id=context.workspace.id).sync(limit=capped_limit)
 
 
 @app.get("/api/projects", response_model=list[schemas.GitLabProjectOut])
-def list_projects(db: Session = Depends(get_db), limit: int = 100):
-    return db.scalars(select(models.GitLabProject).order_by(desc(models.GitLabProject.last_activity_at)).limit(limit)).all()
+def list_projects(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 100):
+    return db.scalars(
+        select(models.GitLabProject)
+        .where(workspace_filter(models.GitLabProject, context.workspace.id))
+        .order_by(desc(models.GitLabProject.last_activity_at))
+        .limit(limit)
+    ).all()
 
 
 @app.get("/api/projects/sync-runs", response_model=list[schemas.ProjectSyncRunOut])
-def list_project_sync_runs(db: Session = Depends(get_db), limit: int = 20):
-    return db.scalars(select(models.ProjectSyncRun).order_by(desc(models.ProjectSyncRun.started_at)).limit(limit)).all()
+def list_project_sync_runs(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 20):
+    return db.scalars(
+        select(models.ProjectSyncRun)
+        .where(workspace_filter(models.ProjectSyncRun, context.workspace.id))
+        .order_by(desc(models.ProjectSyncRun.started_at))
+        .limit(limit)
+    ).all()
 
 
 @app.get("/api/projects/{project_id}", response_model=schemas.GitLabProjectOut)
-def get_project(project_id: int, db: Session = Depends(get_db)):
-    project = db.get(models.GitLabProject, project_id)
+def get_project(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    project = _get_project_or_404(db, project_id, context)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
 
 
 @app.get("/api/projects/{project_id}/merge-requests", response_model=list[schemas.MergeRequestSnapshotOut])
-def list_project_merge_requests(project_id: int, db: Session = Depends(get_db), limit: int = 50):
-    project = _get_project_or_404(db, project_id)
+def list_project_merge_requests(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    project = _get_project_or_404(db, project_id, context)
     return db.scalars(
         select(models.MergeRequestSnapshot)
         .where(models.MergeRequestSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .where(workspace_filter(models.MergeRequestSnapshot, context.workspace.id))
         .order_by(desc(models.MergeRequestSnapshot.updated_at_gitlab))
         .limit(limit)
     ).all()
 
 
 @app.get("/api/projects/{project_id}/pipelines", response_model=list[schemas.PipelineSnapshotOut])
-def list_project_pipelines(project_id: int, db: Session = Depends(get_db), limit: int = 50):
-    project = _get_project_or_404(db, project_id)
+def list_project_pipelines(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    project = _get_project_or_404(db, project_id, context)
     return db.scalars(
         select(models.PipelineSnapshot)
         .where(models.PipelineSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .where(workspace_filter(models.PipelineSnapshot, context.workspace.id))
         .order_by(desc(models.PipelineSnapshot.updated_at_gitlab))
         .limit(limit)
     ).all()
 
 
 @app.get("/api/projects/{project_id}/jobs", response_model=list[schemas.JobSnapshotOut])
-def list_project_jobs(project_id: int, db: Session = Depends(get_db), limit: int = 50):
-    project = _get_project_or_404(db, project_id)
+def list_project_jobs(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    project = _get_project_or_404(db, project_id, context)
     return db.scalars(
         select(models.JobSnapshot)
         .where(models.JobSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .where(workspace_filter(models.JobSnapshot, context.workspace.id))
         .order_by(desc(models.JobSnapshot.synced_at))
         .limit(limit)
     ).all()
 
 
 @app.get("/api/projects/{project_id}/summary", response_model=schemas.ProjectSummaryOut)
-def get_project_summary(project_id: int, db: Session = Depends(get_db)):
-    project = _get_project_or_404(db, project_id)
+def get_project_summary(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    project = _get_project_or_404(db, project_id, context)
     open_merge_requests = db.scalars(
         select(models.MergeRequestSnapshot)
         .where(models.MergeRequestSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .where(workspace_filter(models.MergeRequestSnapshot, context.workspace.id))
         .where(models.MergeRequestSnapshot.state == "opened")
         .order_by(desc(models.MergeRequestSnapshot.updated_at_gitlab))
         .limit(10)
@@ -143,12 +256,14 @@ def get_project_summary(project_id: int, db: Session = Depends(get_db)):
     latest_pipelines = db.scalars(
         select(models.PipelineSnapshot)
         .where(models.PipelineSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .where(workspace_filter(models.PipelineSnapshot, context.workspace.id))
         .order_by(desc(models.PipelineSnapshot.updated_at_gitlab))
         .limit(10)
     ).all()
     failed_jobs = db.scalars(
         select(models.JobSnapshot)
         .where(models.JobSnapshot.gitlab_project_id == project.gitlab_project_id)
+        .where(workspace_filter(models.JobSnapshot, context.workspace.id))
         .where(models.JobSnapshot.status == "failed")
         .order_by(desc(models.JobSnapshot.synced_at))
         .limit(10)
@@ -156,18 +271,21 @@ def get_project_summary(project_id: int, db: Session = Depends(get_db)):
     risks = db.scalars(
         select(models.RiskAssessment)
         .where(models.RiskAssessment.project_path == project.project_path)
+        .where(workspace_filter(models.RiskAssessment, context.workspace.id))
         .order_by(desc(models.RiskAssessment.created_at))
         .limit(10)
     ).all()
     incidents = db.scalars(
         select(models.IncidentRecord)
         .where(models.IncidentRecord.project_path == project.project_path)
+        .where(workspace_filter(models.IncidentRecord, context.workspace.id))
         .order_by(desc(models.IncidentRecord.created_at))
         .limit(10)
     ).all()
     recommendations = db.scalars(
         select(models.Recommendation)
         .where(models.Recommendation.project_path == project.project_path)
+        .where(workspace_filter(models.Recommendation, context.workspace.id))
         .order_by(desc(models.Recommendation.created_at))
         .limit(10)
     ).all()
@@ -177,12 +295,14 @@ def get_project_summary(project_id: int, db: Session = Depends(get_db)):
         actions = db.scalars(
             select(models.ActionDispatch)
             .where(models.ActionDispatch.recommendation_id.in_(recommendation_ids))
+            .where(workspace_filter(models.ActionDispatch, context.workspace.id))
             .order_by(desc(models.ActionDispatch.created_at))
             .limit(10)
         ).all()
     memory_records = db.scalars(
         select(models.MemoryRecord)
         .where(models.MemoryRecord.project_path == project.project_path)
+        .where(workspace_filter(models.MemoryRecord, context.workspace.id))
         .order_by(desc(models.MemoryRecord.created_at))
         .limit(10)
     ).all()
@@ -200,85 +320,130 @@ def get_project_summary(project_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/risks", response_model=list[schemas.RiskAssessmentOut])
-def list_risks(db: Session = Depends(get_db), limit: int = 50):
-    risks = db.scalars(select(models.RiskAssessment).order_by(desc(models.RiskAssessment.created_at)).limit(limit * 3)).all()
+def list_risks(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    risks = db.scalars(
+        select(models.RiskAssessment)
+        .where(workspace_filter(models.RiskAssessment, context.workspace.id))
+        .order_by(desc(models.RiskAssessment.created_at))
+        .limit(limit * 3)
+    ).all()
     return _latest_by(risks, lambda risk: f"{risk.project_path}:{risk.merge_request_iid or risk.deployment_ref}:{risk.score}")[:limit]
 
 
 @app.get("/api/pipelines", response_model=list[schemas.PipelineInsightOut])
-def list_pipelines(db: Session = Depends(get_db), limit: int = 50):
-    return db.scalars(select(models.PipelineInsight).order_by(desc(models.PipelineInsight.created_at)).limit(limit)).all()
+def list_pipelines(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    return db.scalars(
+        select(models.PipelineInsight)
+        .where(workspace_filter(models.PipelineInsight, context.workspace.id))
+        .order_by(desc(models.PipelineInsight.created_at))
+        .limit(limit)
+    ).all()
 
 
 @app.get("/api/merge-requests", response_model=list[schemas.MergeRequestSignalOut])
-def list_merge_requests(db: Session = Depends(get_db), limit: int = 50):
-    return db.scalars(select(models.MergeRequestSignal).order_by(desc(models.MergeRequestSignal.created_at)).limit(limit)).all()
+def list_merge_requests(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    return db.scalars(
+        select(models.MergeRequestSignal)
+        .where(workspace_filter(models.MergeRequestSignal, context.workspace.id))
+        .order_by(desc(models.MergeRequestSignal.created_at))
+        .limit(limit)
+    ).all()
 
 
 @app.get("/api/incidents", response_model=list[schemas.IncidentRecordOut])
-def list_incidents(db: Session = Depends(get_db), limit: int = 50):
-    return db.scalars(select(models.IncidentRecord).order_by(desc(models.IncidentRecord.created_at)).limit(limit)).all()
+def list_incidents(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    return db.scalars(
+        select(models.IncidentRecord)
+        .where(workspace_filter(models.IncidentRecord, context.workspace.id))
+        .order_by(desc(models.IncidentRecord.created_at))
+        .limit(limit)
+    ).all()
 
 
 @app.post("/api/observability/events", response_model=schemas.ObservabilityIngestOut)
-def ingest_observability_event(request: schemas.ObservabilityEventIn, db: Session = Depends(get_db)):
+def ingest_observability_event(request: schemas.ObservabilityEventIn, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     raw = request.model_dump(exclude_none=True)
     provider = raw.pop("provider", "generic") or "generic"
     event, correlation, deduplicated = ObservabilityService(db).ingest(raw, provider=provider)
+    for record in (event, correlation):
+        if record:
+            assign_workspace(record, context.workspace.id)
+    db.commit()
     return {"event": event, "correlation": correlation, "deduplicated": deduplicated}
 
 
 @app.post("/webhooks/observability/{provider}", response_model=schemas.ObservabilityIngestOut)
-async def observability_webhook(provider: str, request: Request, db: Session = Depends(get_db)):
+async def observability_webhook(provider: str, request: Request, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     payload = await _json_or_empty(request)
     event, correlation, deduplicated = ObservabilityService(db).ingest(payload, provider=provider)
+    for record in (event, correlation):
+        if record:
+            assign_workspace(record, context.workspace.id)
+    db.commit()
     return {"event": event, "correlation": correlation, "deduplicated": deduplicated}
 
 
 @app.get("/api/observability/events", response_model=list[schemas.ObservabilityEventOut])
-def list_observability_events(db: Session = Depends(get_db), limit: int = 50, project_path: str = ""):
-    return ObservabilityService(db).list_events(project_path=project_path, limit=max(1, min(limit, 100)))
+def list_observability_events(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50, project_path: str = ""):
+    stmt = select(models.ObservabilityEvent).where(workspace_filter(models.ObservabilityEvent, context.workspace.id))
+    if project_path:
+        stmt = stmt.where(models.ObservabilityEvent.project_path == project_path)
+    return db.scalars(stmt.order_by(desc(models.ObservabilityEvent.observed_at)).limit(max(1, min(limit, 100)))).all()
 
 
 @app.get("/api/observability/correlations", response_model=list[schemas.IncidentCorrelationOut])
-def list_incident_correlations(db: Session = Depends(get_db), limit: int = 50, project_path: str = ""):
-    return ObservabilityService(db).list_correlations(project_path=project_path, limit=max(1, min(limit, 100)))
+def list_incident_correlations(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50, project_path: str = ""):
+    stmt = select(models.IncidentCorrelation).where(workspace_filter(models.IncidentCorrelation, context.workspace.id))
+    if project_path:
+        stmt = stmt.where(models.IncidentCorrelation.project_path == project_path)
+    return db.scalars(stmt.order_by(desc(models.IncidentCorrelation.updated_at)).limit(max(1, min(limit, 100)))).all()
 
 
 @app.get("/api/metrics/summary", response_model=schemas.MetricsSummaryOut)
-def metrics_summary(db: Session = Depends(get_db)):
-    return MetricsService(db).organization_summary()
+def metrics_summary(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    return MetricsService(db, workspace_id=context.workspace.id).organization_summary()
 
 
 @app.get("/api/metrics/projects", response_model=list[schemas.ProjectHealthOut])
-def project_metrics(db: Session = Depends(get_db), limit: int = 100):
-    return MetricsService(db).project_health(limit=max(1, min(limit, 500)))
+def project_metrics(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 100):
+    return MetricsService(db, workspace_id=context.workspace.id).project_health(limit=max(1, min(limit, 500)))
 
 
 @app.post("/api/metrics/snapshots/refresh", response_model=list[schemas.EngineeringMetricSnapshotOut])
-def refresh_metric_snapshots(db: Session = Depends(get_db)):
-    return MetricsService(db).refresh_snapshots()
+def refresh_metric_snapshots(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    return MetricsService(db, workspace_id=context.workspace.id).refresh_snapshots()
 
 
 @app.get("/api/metrics/snapshots", response_model=list[schemas.EngineeringMetricSnapshotOut])
-def list_metric_snapshots(db: Session = Depends(get_db), limit: int = 100, project_path: str = ""):
-    return MetricsService(db).list_snapshots(project_path=project_path, limit=max(1, min(limit, 500)))
+def list_metric_snapshots(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 100, project_path: str = ""):
+    return MetricsService(db, workspace_id=context.workspace.id).list_snapshots(project_path=project_path, limit=max(1, min(limit, 500)))
 
 
 @app.get("/api/memory", response_model=list[schemas.MemoryRecordOut])
-def list_memory(db: Session = Depends(get_db), limit: int = 50):
-    return db.scalars(select(models.MemoryRecord).order_by(desc(models.MemoryRecord.created_at)).limit(limit)).all()
+def list_memory(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    return db.scalars(
+        select(models.MemoryRecord)
+        .where(workspace_filter(models.MemoryRecord, context.workspace.id))
+        .order_by(desc(models.MemoryRecord.created_at))
+        .limit(limit)
+    ).all()
 
 
 @app.get("/api/recommendations", response_model=list[schemas.RecommendationOut])
 def list_recommendations(
     db: Session = Depends(get_db),
+    context: RequestContext = Depends(get_current_context),
     limit: int = 50,
     severity: str | None = None,
     status: str | None = None,
     action_type: str | None = None,
 ):
-    recommendations = db.scalars(select(models.Recommendation).order_by(desc(models.Recommendation.created_at)).limit(limit * 4)).all()
+    recommendations = db.scalars(
+        select(models.Recommendation)
+        .where(workspace_filter(models.Recommendation, context.workspace.id))
+        .order_by(desc(models.Recommendation.created_at))
+        .limit(limit * 4)
+    ).all()
     shaped = _ranked_recommendations(db, recommendations)
     if severity:
         shaped = [item for item in shaped if item["severity"] == severity]
@@ -290,40 +455,56 @@ def list_recommendations(
 
 
 @app.get("/api/action-dispatches", response_model=list[schemas.ActionDispatchOut])
-def list_action_dispatches(db: Session = Depends(get_db), limit: int = 50):
-    return db.scalars(select(models.ActionDispatch).order_by(desc(models.ActionDispatch.created_at)).limit(limit)).all()
+def list_action_dispatches(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    return db.scalars(
+        select(models.ActionDispatch)
+        .where(workspace_filter(models.ActionDispatch, context.workspace.id))
+        .order_by(desc(models.ActionDispatch.created_at))
+        .limit(limit)
+    ).all()
 
 
 @app.post("/api/actions/propose-from-recommendations", response_model=list[schemas.AgentActionOut])
-def propose_actions_from_recommendations(db: Session = Depends(get_db), limit: int = 50):
-    return AgentActionService(db).propose_from_recommendations(limit=max(1, min(limit, 100)))
+def propose_actions_from_recommendations(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    return AgentActionService(db, workspace_id=context.workspace.id).propose_from_recommendations(limit=max(1, min(limit, 100)))
 
 
 @app.get("/api/actions", response_model=list[schemas.AgentActionOut])
-def list_agent_actions(db: Session = Depends(get_db), limit: int = 50):
-    return db.scalars(select(models.AgentAction).order_by(desc(models.AgentAction.created_at)).limit(limit)).all()
+def list_agent_actions(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    return db.scalars(
+        select(models.AgentAction)
+        .where(workspace_filter(models.AgentAction, context.workspace.id))
+        .order_by(desc(models.AgentAction.created_at))
+        .limit(limit)
+    ).all()
 
 
 @app.get("/api/actions/{action_id}", response_model=schemas.AgentActionDetailOut)
-def get_agent_action(action_id: int, db: Session = Depends(get_db)):
-    service = AgentActionService(db)
+def get_agent_action(action_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    service = AgentActionService(db, workspace_id=context.workspace.id)
     action = _agent_action_or_404(service, action_id)
-    approvals = db.scalars(select(models.ActionApproval).where(models.ActionApproval.agent_action_id == action.id).order_by(desc(models.ActionApproval.created_at))).all()
+    approvals = db.scalars(
+        select(models.ActionApproval)
+        .where(models.ActionApproval.agent_action_id == action.id)
+        .where(workspace_filter(models.ActionApproval, context.workspace.id))
+        .order_by(desc(models.ActionApproval.created_at))
+    ).all()
     dispatches = []
     if action.recommendation_id:
         dispatches = db.scalars(
             select(models.ActionDispatch)
             .where(models.ActionDispatch.recommendation_id == action.recommendation_id)
+            .where(workspace_filter(models.ActionDispatch, context.workspace.id))
             .order_by(desc(models.ActionDispatch.created_at))
         ).all()
     return {"action": action, "approvals": approvals, "dispatches": dispatches}
 
 
 @app.post("/api/actions/{action_id}/approve", response_model=schemas.AgentActionOut)
-def approve_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db)):
+def approve_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     decision = decision or schemas.ActionDecisionIn()
     try:
-        return AgentActionService(db).approve(action_id, actor=decision.actor, reason=decision.reason)
+        return AgentActionService(db, workspace_id=context.workspace.id).approve(action_id, actor=decision.actor, reason=decision.reason)
     except LookupError:
         raise HTTPException(status_code=404, detail="Action not found") from None
     except ValueError as exc:
@@ -331,10 +512,10 @@ def approve_agent_action(action_id: int, decision: schemas.ActionDecisionIn | No
 
 
 @app.post("/api/actions/{action_id}/reject", response_model=schemas.AgentActionOut)
-def reject_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db)):
+def reject_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     decision = decision or schemas.ActionDecisionIn()
     try:
-        return AgentActionService(db).reject(action_id, actor=decision.actor, reason=decision.reason)
+        return AgentActionService(db, workspace_id=context.workspace.id).reject(action_id, actor=decision.actor, reason=decision.reason)
     except LookupError:
         raise HTTPException(status_code=404, detail="Action not found") from None
     except ValueError as exc:
@@ -342,9 +523,9 @@ def reject_agent_action(action_id: int, decision: schemas.ActionDecisionIn | Non
 
 
 @app.post("/api/actions/{action_id}/execute", response_model=schemas.AgentActionOut)
-def execute_agent_action(action_id: int, db: Session = Depends(get_db)):
+def execute_agent_action(action_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     try:
-        return AgentActionService(db).execute(action_id)
+        return AgentActionService(db, workspace_id=context.workspace.id).execute(action_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="Action not found") from None
     except PermissionError as exc:
@@ -354,9 +535,9 @@ def execute_agent_action(action_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/fix-plans", response_model=schemas.FixPlanOut)
-def create_fix_plan(request: schemas.FixPlanCreateIn, db: Session = Depends(get_db)):
+def create_fix_plan(request: schemas.FixPlanCreateIn, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     try:
-        return FixPlanService(db).create(
+        return FixPlanService(db, workspace_id=context.workspace.id).create(
             project_id=request.project_id,
             project_path=request.project_path,
             source_type=request.source_type,
@@ -371,13 +552,13 @@ def create_fix_plan(request: schemas.FixPlanCreateIn, db: Session = Depends(get_
 
 
 @app.get("/api/fix-plans", response_model=list[schemas.FixPlanOut])
-def list_fix_plans(db: Session = Depends(get_db), limit: int = 50):
-    return FixPlanService(db).list(limit=max(1, min(limit, 100)))
+def list_fix_plans(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    return FixPlanService(db, workspace_id=context.workspace.id).list(limit=max(1, min(limit, 100)))
 
 
 @app.get("/api/fix-plans/{plan_id}", response_model=schemas.FixPlanDetailOut)
-def get_fix_plan(plan_id: int, db: Session = Depends(get_db)):
-    service = FixPlanService(db)
+def get_fix_plan(plan_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    service = FixPlanService(db, workspace_id=context.workspace.id)
     try:
         plan = service.get(plan_id)
     except LookupError:
@@ -386,10 +567,10 @@ def get_fix_plan(plan_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/fix-plans/{plan_id}/approve", response_model=schemas.FixPlanOut)
-def approve_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db)):
+def approve_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     decision = decision or schemas.FixPlanDecisionIn()
     try:
-        return FixPlanService(db).approve(plan_id, actor=decision.actor, reason=decision.reason)
+        return FixPlanService(db, workspace_id=context.workspace.id).approve(plan_id, actor=decision.actor, reason=decision.reason)
     except LookupError:
         raise HTTPException(status_code=404, detail="Fix plan not found") from None
     except ValueError as exc:
@@ -397,10 +578,10 @@ def approve_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = 
 
 
 @app.post("/api/fix-plans/{plan_id}/reject", response_model=schemas.FixPlanOut)
-def reject_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db)):
+def reject_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     decision = decision or schemas.FixPlanDecisionIn()
     try:
-        return FixPlanService(db).reject(plan_id, actor=decision.actor, reason=decision.reason)
+        return FixPlanService(db, workspace_id=context.workspace.id).reject(plan_id, actor=decision.actor, reason=decision.reason)
     except LookupError:
         raise HTTPException(status_code=404, detail="Fix plan not found") from None
     except ValueError as exc:
@@ -408,9 +589,9 @@ def reject_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = N
 
 
 @app.post("/api/fix-plans/{plan_id}/create-branch", response_model=schemas.FixPlanOut)
-def create_fix_plan_branch(plan_id: int, db: Session = Depends(get_db)):
+def create_fix_plan_branch(plan_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     try:
-        return FixPlanService(db).create_branch(plan_id)
+        return FixPlanService(db, workspace_id=context.workspace.id).create_branch(plan_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="Fix plan not found") from None
     except PermissionError as exc:
@@ -420,9 +601,9 @@ def create_fix_plan_branch(plan_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/fix-plans/{plan_id}/open-merge-request", response_model=schemas.FixPlanOut)
-def open_fix_plan_merge_request(plan_id: int, db: Session = Depends(get_db)):
+def open_fix_plan_merge_request(plan_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     try:
-        return FixPlanService(db).open_merge_request(plan_id)
+        return FixPlanService(db, workspace_id=context.workspace.id).open_merge_request(plan_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="Fix plan not found") from None
     except PermissionError as exc:
@@ -432,31 +613,61 @@ def open_fix_plan_merge_request(plan_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/chat", response_model=schemas.ChatResponseOut)
-def create_chat_message(request: schemas.ChatRequestIn, db: Session = Depends(get_db)):
+def create_chat_message(request: schemas.ChatRequestIn, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     if not request.message.strip():
         raise HTTPException(status_code=422, detail="message is required")
-    if request.project_id and not db.get(models.GitLabProject, request.project_id):
+    if request.project_id and not db.scalar(select(models.GitLabProject).where(models.GitLabProject.id == request.project_id).where(workspace_filter(models.GitLabProject, context.workspace.id))):
         raise HTTPException(status_code=404, detail="Project not found")
-    response = ChatService(db).answer(message=request.message, project_id=request.project_id, thread_id=request.thread_id)
+    response = ChatService(db, workspace_id=context.workspace.id).answer(message=request.message, project_id=request.project_id, thread_id=request.thread_id)
     return response
 
 
 @app.get("/api/chat/threads", response_model=list[schemas.ChatThreadOut])
-def list_chat_threads(db: Session = Depends(get_db), limit: int = 30):
-    return db.scalars(select(models.ChatThread).order_by(desc(models.ChatThread.updated_at)).limit(limit)).all()
+def list_chat_threads(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 30):
+    return db.scalars(
+        select(models.ChatThread)
+        .where(workspace_filter(models.ChatThread, context.workspace.id))
+        .order_by(desc(models.ChatThread.updated_at))
+        .limit(limit)
+    ).all()
 
 
 @app.get("/api/chat/threads/{thread_id}", response_model=list[schemas.ChatMessageOut])
-def list_chat_messages(thread_id: int, db: Session = Depends(get_db)):
+def list_chat_messages(thread_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     thread = db.get(models.ChatThread, thread_id)
-    if not thread:
+    if not thread or thread.workspace_id != context.workspace.id:
         raise HTTPException(status_code=404, detail="Thread not found")
-    return db.scalars(select(models.ChatMessage).where(models.ChatMessage.thread_id == thread_id).order_by(models.ChatMessage.created_at)).all()
+    return db.scalars(
+        select(models.ChatMessage)
+        .where(models.ChatMessage.thread_id == thread_id)
+        .where(workspace_filter(models.ChatMessage, context.workspace.id))
+        .order_by(models.ChatMessage.created_at)
+    ).all()
 
 
 @app.get("/api/integrations/slack")
-def slack_integration_status(db: Session = Depends(get_db)) -> dict:
-    return _slack_status(db)
+def slack_integration_status(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)) -> dict:
+    return _slack_status(db, context)
+
+
+@app.get("/api/integrations/slack/connect")
+def slack_oauth_connect(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), redirect_after: str = "/"):
+    try:
+        url = OAuthService(db).slack_auth_url(user_id=context.user.id, workspace_id=context.workspace.id, redirect_after=redirect_after)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+    return RedirectResponse(url)
+
+
+@app.get("/api/integrations/slack/callback")
+def slack_oauth_callback(code: str = "", state: str = "", db: Session = Depends(get_db)):
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing OAuth callback code or state")
+    try:
+        result = OAuthService(db).complete_slack_callback(code=code, state=state)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Slack OAuth failed: {exc}") from None
+    return RedirectResponse(f"{settings.app_public_url.rstrip('/')}{result.redirect_url}")
 
 
 @app.post("/slack/commands")
@@ -496,37 +707,37 @@ def ai_integration_status() -> dict:
 
 
 @app.get("/api/agent/tools")
-def list_agent_tools(db: Session = Depends(get_db)) -> dict:
-    return {"tools": AgentToolService(db).list_tools()}
+def list_agent_tools(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)) -> dict:
+    return {"tools": AgentToolService(db, workspace_id=context.workspace.id).list_tools()}
 
 
 @app.post("/api/agent/tools/{tool_name}/invoke")
-async def invoke_agent_tool(tool_name: str, request: Request, db: Session = Depends(get_db)) -> dict:
+async def invoke_agent_tool(tool_name: str, request: Request, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)) -> dict:
     arguments = await _json_or_empty(request)
     try:
-        return AgentToolService(db).call_tool(tool_name, arguments)
+        return AgentToolService(db, workspace_id=context.workspace.id).call_tool(tool_name, arguments)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
 
 
 @app.post("/mcp")
-async def mcp_json_rpc(request: Request, db: Session = Depends(get_db)):
+async def mcp_json_rpc(request: Request, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     payload = await request.json()
     if isinstance(payload, list):
-        return [_mcp_response(item, db) for item in payload]
-    response = _mcp_response(payload, db)
+        return [_mcp_response(item, db, context.workspace.id) for item in payload]
+    response = _mcp_response(payload, db, context.workspace.id)
     if response is None:
         return Response(status_code=202)
     return response
 
 
 @app.get("/api/dashboard/summary", response_model=schemas.DashboardSummary)
-def dashboard_summary(db: Session = Depends(get_db)):
-    risks = db.scalars(select(models.RiskAssessment).order_by(desc(models.RiskAssessment.created_at)).limit(200)).all()
-    pipelines = db.scalars(select(models.PipelineInsight).where(models.PipelineInsight.status == "failed").order_by(desc(models.PipelineInsight.created_at)).limit(200)).all()
-    merge_requests = db.scalars(select(models.MergeRequestSignal).order_by(desc(models.MergeRequestSignal.created_at)).limit(200)).all()
-    incidents = db.scalars(select(models.IncidentRecord).where(models.IncidentRecord.status == "open").order_by(desc(models.IncidentRecord.created_at)).limit(200)).all()
-    recommendations = db.scalars(select(models.Recommendation).order_by(desc(models.Recommendation.created_at)).limit(100)).all()
+def dashboard_summary(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    risks = db.scalars(select(models.RiskAssessment).where(workspace_filter(models.RiskAssessment, context.workspace.id)).order_by(desc(models.RiskAssessment.created_at)).limit(200)).all()
+    pipelines = db.scalars(select(models.PipelineInsight).where(workspace_filter(models.PipelineInsight, context.workspace.id)).where(models.PipelineInsight.status == "failed").order_by(desc(models.PipelineInsight.created_at)).limit(200)).all()
+    merge_requests = db.scalars(select(models.MergeRequestSignal).where(workspace_filter(models.MergeRequestSignal, context.workspace.id)).order_by(desc(models.MergeRequestSignal.created_at)).limit(200)).all()
+    incidents = db.scalars(select(models.IncidentRecord).where(workspace_filter(models.IncidentRecord, context.workspace.id)).where(models.IncidentRecord.status == "open").order_by(desc(models.IncidentRecord.created_at)).limit(200)).all()
+    recommendations = db.scalars(select(models.Recommendation).where(workspace_filter(models.Recommendation, context.workspace.id)).order_by(desc(models.Recommendation.created_at)).limit(100)).all()
 
     visible_recommendations = _ranked_recommendations(db, recommendations)[:6]
     return {
@@ -535,7 +746,7 @@ def dashboard_summary(db: Session = Depends(get_db)):
         "blocked_merge_requests": len(_latest_by([mr for mr in merge_requests if mr.bottleneck_level in {"blocked", "stale"}], lambda mr: f"{mr.project_path}:{mr.merge_request_iid}")),
         "open_incidents": len(_latest_by(incidents, lambda incident: f"{incident.project_path}:{incident.title}:{incident.probable_root_cause}")),
         "latest_recommendations": visible_recommendations,
-        "slack_status": _slack_status(db),
+        "slack_status": _slack_status(db, context),
     }
 
 
@@ -559,11 +770,11 @@ async def _json_or_empty(request: Request) -> dict:
     return body if isinstance(body, dict) else {}
 
 
-def _mcp_response(payload: dict, db: Session) -> dict | None:
+def _mcp_response(payload: dict, db: Session, workspace_id: int | None = None) -> dict | None:
     request_id = payload.get("id")
     method = payload.get("method")
     params = payload.get("params") or {}
-    service = AgentToolService(db)
+    service = AgentToolService(db, workspace_id=workspace_id)
 
     if request_id is None and str(method).startswith("notifications/"):
         return None
@@ -592,9 +803,9 @@ def _ranked_recommendations(db: Session, recommendations: list[models.Recommenda
     return sorted(shaped, key=lambda item: (item["rank_score"], item["created_at"]), reverse=True)
 
 
-def _get_project_or_404(db: Session, project_id: int) -> models.GitLabProject:
+def _get_project_or_404(db: Session, project_id: int, context: RequestContext) -> models.GitLabProject:
     project = db.get(models.GitLabProject, project_id)
-    if not project:
+    if not project or project.workspace_id != context.workspace.id:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
 
@@ -794,15 +1005,42 @@ def _safe_int(value: str) -> int | None:
         return None
 
 
-def _slack_status(db: Session) -> dict:
-    last_dispatch = db.scalars(select(models.ActionDispatch).where(models.ActionDispatch.channel == "slack").order_by(desc(models.ActionDispatch.created_at)).limit(1)).first()
+def _attach_created_records(db: Session, workspace_id: int) -> None:
+    for model in (
+        models.OperationalEvent,
+        models.WebhookReceipt,
+        models.RiskAssessment,
+        models.PipelineInsight,
+        models.MergeRequestSignal,
+        models.IncidentRecord,
+        models.Recommendation,
+        models.ActionDispatch,
+        models.MemoryRecord,
+    ):
+        for record in db.scalars(select(model).where(model.workspace_id.is_(None)).limit(200)).all():
+            assign_workspace(record, workspace_id)
+    db.commit()
+
+
+def _slack_status(db: Session, context: RequestContext | None = None) -> dict:
+    stmt = select(models.ActionDispatch).where(models.ActionDispatch.channel == "slack")
+    if context is not None:
+        stmt = stmt.where(workspace_filter(models.ActionDispatch, context.workspace.id))
+    last_dispatch = db.scalars(stmt.order_by(desc(models.ActionDispatch.created_at)).limit(1)).first()
+    oauth_status = OAuthService(db).slack_status(workspace_id=context.workspace.id) if context is not None else {}
+    oauth_connected = bool(oauth_status.get("connected"))
+    oauth_configured = bool(oauth_status.get("configured"))
     return {
-        "configured": bool(settings.slack_webhook_url or settings.slack_bot_token or settings.slack_signing_secret),
+        "configured": bool(settings.slack_webhook_url or settings.slack_bot_token or settings.slack_signing_secret or oauth_connected or oauth_configured),
         "webhook_configured": bool(settings.slack_webhook_url),
         "bot_token_configured": bool(settings.slack_bot_token),
         "signing_secret_configured": bool(settings.slack_signing_secret),
         "default_channel_configured": bool(settings.slack_default_channel),
         "default_channel": settings.slack_default_channel,
+        "oauth_configured": oauth_configured,
+        "oauth_connected": oauth_connected,
+        "oauth_account_label": oauth_status.get("account_label", ""),
+        "oauth_channel": oauth_status.get("channel", ""),
         "mode": "dry_run" if settings.dry_run_actions else "live",
         "last_status": last_dispatch.status if last_dispatch else "none",
         "last_error": last_dispatch.error if last_dispatch else "",

@@ -1,10 +1,17 @@
 import Link from "next/link";
 import { ArrowLeft, MessageSquareText } from "lucide-react";
 import { getAiIntegrationStatus, getChatThreads, getProjectsData } from "@/lib/api";
+import { redirectIfUnauthorized } from "../authRedirect";
 import { ChatPanel } from "./ChatPanel";
 
 export default async function ChatPage() {
-  const [{ projects }, threads, aiStatus] = await Promise.all([getProjectsData(), getChatThreads(), getAiIntegrationStatus()]);
+  let data;
+  try {
+    data = await Promise.all([getProjectsData(), getChatThreads(), getAiIntegrationStatus()]);
+  } catch (error) {
+    redirectIfUnauthorized(error);
+  }
+  const [{ projects }, threads, aiStatus] = data;
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">

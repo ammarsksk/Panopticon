@@ -8,7 +8,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app import models
-from app.integrations.gitlab import GitLabClient
+from app.services.oauth import gitlab_client_for_workspace
 
 
 SAFE_FIX_TYPES = {
@@ -22,8 +22,9 @@ TERMINAL_STATUSES = {"rejected", "mr_opened", "dry_run_mr_ready"}
 
 
 class FixPlanService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, workspace_id: int | None = None) -> None:
         self.db = db
+        self.workspace_id = workspace_id
 
     def create(
         self,
@@ -59,6 +60,7 @@ class FixPlanService:
         self._validate_plan_payload(payload, project.default_branch or "main")
         plan = models.FixPlan(
             project_id=project.id,
+            workspace_id=self.workspace_id,
             project_path=project.project_path,
             source_type=source_type or _source_type_for(source),
             source_id=source_id,
@@ -81,20 +83,22 @@ class FixPlanService:
         return plan
 
     def list(self, *, limit: int = 50) -> list[models.FixPlan]:
-        return self.db.scalars(select(models.FixPlan).order_by(desc(models.FixPlan.created_at)).limit(limit)).all()
+        stmt = select(models.FixPlan)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.FixPlan.workspace_id == self.workspace_id)
+        return self.db.scalars(stmt.order_by(desc(models.FixPlan.created_at)).limit(limit)).all()
 
     def get(self, plan_id: int) -> models.FixPlan:
         plan = self.db.get(models.FixPlan, plan_id)
-        if not plan:
+        if not plan or (self.workspace_id is not None and plan.workspace_id != self.workspace_id):
             raise LookupError("Fix plan not found")
         return plan
 
     def approvals(self, plan_id: int) -> list[models.FixPlanApproval]:
-        return self.db.scalars(
-            select(models.FixPlanApproval)
-            .where(models.FixPlanApproval.fix_plan_id == plan_id)
-            .order_by(desc(models.FixPlanApproval.created_at))
-        ).all()
+        stmt = select(models.FixPlanApproval).where(models.FixPlanApproval.fix_plan_id == plan_id)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.FixPlanApproval.workspace_id == self.workspace_id)
+        return self.db.scalars(stmt.order_by(desc(models.FixPlanApproval.created_at))).all()
 
     def approve(self, plan_id: int, *, actor: str = "local_user", reason: str = "") -> models.FixPlan:
         plan = self.get(plan_id)
@@ -123,7 +127,7 @@ class FixPlanService:
             raise PermissionError("Fix plan must be approved before creating a branch")
         self._validate_plan_payload(plan.plan_payload, plan.base_branch)
 
-        client = GitLabClient()
+        client = gitlab_client_for_workspace(self.db, self.workspace_id)
         branch_result = client.create_branch(plan.project_path, plan.branch_name, plan.base_branch)
         commit_result = client.create_commit(
             plan.project_path,
@@ -145,7 +149,7 @@ class FixPlanService:
             raise PermissionError("Fix plan branch must be prepared before opening a merge request")
         self._validate_plan_payload(plan.plan_payload, plan.base_branch)
 
-        result = GitLabClient().create_merge_request(
+        result = gitlab_client_for_workspace(self.db, self.workspace_id).create_merge_request(
             plan.project_path,
             plan.branch_name,
             plan.base_branch,
@@ -164,6 +168,7 @@ class FixPlanService:
     def _record_decision(self, plan: models.FixPlan, *, decision: str, actor: str, reason: str) -> models.FixPlanApproval:
         approval = models.FixPlanApproval(
             fix_plan_id=plan.id,
+            workspace_id=plan.workspace_id or self.workspace_id,
             decision=decision,
             actor=actor or "local_user",
             reason=reason,
@@ -175,11 +180,14 @@ class FixPlanService:
     def _resolve_project(self, *, project_id: int | None, project_path: str) -> models.GitLabProject | None:
         if project_id:
             project = self.db.get(models.GitLabProject, project_id)
-            if not project:
+            if not project or (self.workspace_id is not None and project.workspace_id != self.workspace_id):
                 raise LookupError("Project not found")
             return project
         if project_path:
-            return self.db.scalar(select(models.GitLabProject).where(models.GitLabProject.project_path == project_path))
+            stmt = select(models.GitLabProject).where(models.GitLabProject.project_path == project_path)
+            if self.workspace_id is not None:
+                stmt = stmt.where(models.GitLabProject.workspace_id == self.workspace_id)
+            return self.db.scalar(stmt)
         return None
 
     def _resolve_source(self, source_type: str, source_id: str):
@@ -194,7 +202,10 @@ class FixPlanService:
         if not model:
             return None
         try:
-            return self.db.get(model, int(source_id))
+            record = self.db.get(model, int(source_id))
+            if record and self.workspace_id is not None and getattr(record, "workspace_id", None) != self.workspace_id:
+                return None
+            return record
         except ValueError:
             return None
 

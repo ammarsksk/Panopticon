@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export type Recommendation = {
   id: number;
@@ -31,6 +31,10 @@ export type SlackStatus = {
   signing_secret_configured: boolean;
   default_channel_configured: boolean;
   default_channel: string;
+  oauth_configured?: boolean;
+  oauth_connected?: boolean;
+  oauth_account_label?: string;
+  oauth_channel?: string;
   mode: "dry_run" | "live";
   last_status: string;
   last_error: string;
@@ -46,6 +50,34 @@ export type AiIntegrationStatus = {
   chat_mode: "vertex_gemini" | "deterministic_fallback";
   tool_layer: string;
   mcp_enabled: boolean;
+};
+
+export type OAuthIntegrationStatus = {
+  provider: string;
+  configured: boolean;
+  connected: boolean;
+  account_label: string;
+  scopes: string[];
+  expires_at: string | null;
+  base_url: string;
+};
+
+export type AuthSession = {
+  user: {
+    id: number;
+    email: string;
+    name: string;
+    is_active: boolean;
+    created_at: string;
+  };
+  workspace: {
+    id: number;
+    name: string;
+    slug: string;
+    created_at: string;
+  };
+  role: string;
+  auth_required: boolean;
 };
 
 export type DashboardSummary = {
@@ -379,18 +411,34 @@ export type ProjectSummary = {
   memory_records: MemoryRecord[];
 };
 
+export class ApiError extends Error {
+  status: number;
+  path: string;
+
+  constructor(path: string, status: number) {
+    super(`Failed to load ${path}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.path = path;
+  }
+}
+
+export function isUnauthorized(error: unknown) {
+  return error instanceof ApiError && error.status === 401;
+}
+
 async function get<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  const response = await fetch(`${API_BASE}${path}`, { cache: "no-store", credentials: "include", headers: await forwardedHeaders() });
   if (!response.ok) {
-    throw new Error(`Failed to load ${path}`);
+    throw new ApiError(path, response.status);
   }
   return response.json();
 }
 
 async function post<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, { method: "POST", cache: "no-store" });
+  const response = await fetch(`${API_BASE}${path}`, { method: "POST", cache: "no-store", credentials: "include", headers: await forwardedHeaders() });
   if (!response.ok) {
-    throw new Error(`Failed to post ${path}`);
+    throw new ApiError(path, response.status);
   }
   return response.json();
 }
@@ -399,13 +447,42 @@ async function postJson<T>(path: string, body: Record<string, unknown> = {}): Pr
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     cache: "no-store",
-    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(await forwardedHeaders()) },
     body: JSON.stringify(body)
   });
   if (!response.ok) {
-    throw new Error(`Failed to post ${path}`);
+    throw new ApiError(path, response.status);
   }
   return response.json();
+}
+
+async function forwardedHeaders(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined") return {};
+  try {
+    const nextHeaders = await import("next/headers");
+    const cookieStore = await nextHeaders.cookies();
+    const cookieHeader = cookieStore.toString();
+    return cookieHeader ? { Cookie: cookieHeader } : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function getAuthSession() {
+  return get<AuthSession>("/api/auth/me");
+}
+
+export async function login(email: string, password: string) {
+  return postJson<AuthSession>("/api/auth/login", { email, password });
+}
+
+export async function signup(email: string, password: string, name: string, workspaceName: string) {
+  return postJson<AuthSession>("/api/auth/signup", { email, password, name, workspace_name: workspaceName });
+}
+
+export async function logout() {
+  return post<{ status: string }>("/api/auth/logout");
 }
 
 export async function getDashboardData() {
@@ -446,12 +523,13 @@ export async function refreshMetricSnapshots() {
 }
 
 export async function getProjectsData() {
-  const [projects, syncRuns] = await Promise.all([
+  const [projects, syncRuns, gitlabIntegration] = await Promise.all([
     get<GitLabProject[]>("/api/projects"),
-    get<ProjectSyncRun[]>("/api/projects/sync-runs")
+    get<ProjectSyncRun[]>("/api/projects/sync-runs"),
+    get<OAuthIntegrationStatus>("/api/integrations/gitlab/status")
   ]);
 
-  return { projects, syncRuns };
+  return { projects, syncRuns, gitlabIntegration };
 }
 
 export async function syncGitLabProjects(limit = 50) {

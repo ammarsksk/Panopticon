@@ -10,19 +10,36 @@ from app.config import get_settings
 
 
 class SlackNotifier:
-    def __init__(self) -> None:
+    def __init__(self, webhook_url: str = "", bot_token: str = "", default_channel: str = "") -> None:
         self.settings = get_settings()
+        self.webhook_url = webhook_url or self.settings.slack_webhook_url
+        self.bot_token = bot_token or self.settings.slack_bot_token
+        self.default_channel = default_channel or self.settings.slack_default_channel
 
     def send(self, message: str) -> dict:
         return self.send_alert(title="Panopticon alert", message=message, severity="info")
 
     def send_alert(self, *, title: str, message: str, severity: str, fields: dict | None = None) -> dict:
         payload = self._payload(title=title, message=message, severity=severity, fields=fields or {})
-        if self.settings.dry_run_actions or not self.settings.slack_webhook_url:
+        if self.settings.dry_run_actions:
             return {"status": "dry_run", "payload": payload}
-        response = httpx.post(self.settings.slack_webhook_url, json=payload, timeout=10)
-        response.raise_for_status()
-        return {"status": "sent", "code": response.status_code}
+        if self.webhook_url:
+            response = httpx.post(self.webhook_url, json=payload, timeout=10)
+            response.raise_for_status()
+            return {"status": "sent", "code": response.status_code}
+        if self.bot_token and self.default_channel:
+            response = httpx.post(
+                "https://slack.com/api/chat.postMessage",
+                headers={"Authorization": f"Bearer {self.bot_token}"},
+                json={"channel": self.default_channel, **payload},
+                timeout=10,
+            )
+            response.raise_for_status()
+            body = response.json()
+            if not body.get("ok"):
+                return {"status": "failed", "error": body.get("error", "Slack chat.postMessage failed")}
+            return {"status": "sent", "code": response.status_code}
+        return {"status": "dry_run", "reason": "Slack is not connected", "payload": payload}
 
     def _payload(self, *, title: str, message: str, severity: str, fields: dict) -> dict:
         severity_label = severity.upper()

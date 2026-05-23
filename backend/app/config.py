@@ -31,18 +31,34 @@ def _csv_env(name: str, default: list[str]) -> list[str]:
 class Settings:
     app_name: str = "Panopticon"
     app_env: str = "development"
+    app_api_url: str = "http://localhost:8000"
     app_public_url: str = "http://localhost:3000"
     database_url: str = "sqlite:///./panopticon.db"
     allowed_origins: list[str] | None = None
     db_pool_size: int = 5
     db_max_overflow: int = 10
+    auth_required: bool = False
+    session_cookie_name: str = "panopticon_session"
+    session_ttl_hours: int = 168
+    default_workspace_slug: str = "local-dev"
     gitlab_webhook_secret: str = ""
     gitlab_base_url: str = "https://gitlab.com"
     gitlab_token: str = ""
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_redirect_uri: str = ""
+    gitlab_oauth_client_id: str = ""
+    gitlab_oauth_client_secret: str = ""
+    gitlab_oauth_redirect_uri: str = ""
+    oauth_token_encryption_key: str = ""
+    oauth_state_ttl_minutes: int = 15
     slack_webhook_url: str = ""
     slack_signing_secret: str = ""
     slack_bot_token: str = ""
     slack_default_channel: str = ""
+    slack_oauth_client_id: str = ""
+    slack_oauth_client_secret: str = ""
+    slack_oauth_redirect_uri: str = ""
     dry_run_actions: bool = True
     dispatch_actions: bool = True
     gemini_enabled: bool = False
@@ -69,10 +85,24 @@ class Settings:
             missing.append("DATABASE_URL must use PostgreSQL in production")
         if not self.gitlab_webhook_secret:
             missing.append("GITLAB_WEBHOOK_SECRET")
-        if not self.gitlab_token:
-            missing.append("GITLAB_TOKEN")
+        if not self.gitlab_token and not (self.gitlab_oauth_client_id and self.gitlab_oauth_client_secret):
+            missing.append("GITLAB_TOKEN or GitLab OAuth credentials")
+        if not self.google_oauth_client_id:
+            missing.append("GOOGLE_OAUTH_CLIENT_ID")
+        if not self.google_oauth_client_secret:
+            missing.append("GOOGLE_OAUTH_CLIENT_SECRET")
+        if not self.gitlab_oauth_client_id:
+            missing.append("GITLAB_OAUTH_CLIENT_ID")
+        if not self.gitlab_oauth_client_secret:
+            missing.append("GITLAB_OAUTH_CLIENT_SECRET")
+        if not self.oauth_token_encryption_key:
+            missing.append("OAUTH_TOKEN_ENCRYPTION_KEY")
         if not self.slack_signing_secret:
             missing.append("SLACK_SIGNING_SECRET")
+        if not self.slack_oauth_client_id:
+            missing.append("SLACK_OAUTH_CLIENT_ID")
+        if not self.slack_oauth_client_secret:
+            missing.append("SLACK_OAUTH_CLIENT_SECRET")
         if not self.gemini_enabled:
             missing.append("GEMINI_ENABLED=true")
         if not self.google_genai_use_vertexai:
@@ -81,6 +111,8 @@ class Settings:
             missing.append("GOOGLE_CLOUD_PROJECT")
         if not self.allowed_origins or any(origin == "*" for origin in self.allowed_origins):
             missing.append("ALLOWED_ORIGINS must be explicit in production")
+        if not self.auth_required:
+            missing.append("AUTH_REQUIRED=true")
         if missing:
             raise RuntimeError("Production configuration is incomplete: " + ", ".join(missing))
 
@@ -92,18 +124,34 @@ def get_settings() -> Settings:
     return Settings(
         app_name=os.getenv("APP_NAME", "Panopticon"),
         app_env=os.getenv("APP_ENV", "development"),
+        app_api_url=os.getenv("APP_API_URL", "http://localhost:8000"),
         app_public_url=os.getenv("APP_PUBLIC_URL", "http://localhost:3000"),
         database_url=os.getenv("DATABASE_URL", "sqlite:///./panopticon.db"),
         allowed_origins=_csv_env("ALLOWED_ORIGINS", ["http://localhost:3000", "http://127.0.0.1:3000"]),
         db_pool_size=_int_env("DB_POOL_SIZE", 5),
         db_max_overflow=_int_env("DB_MAX_OVERFLOW", 10),
+        auth_required=_bool_env("AUTH_REQUIRED", False),
+        session_cookie_name=os.getenv("SESSION_COOKIE_NAME", "panopticon_session"),
+        session_ttl_hours=_int_env("SESSION_TTL_HOURS", 168),
+        default_workspace_slug=os.getenv("DEFAULT_WORKSPACE_SLUG", "local-dev"),
         gitlab_webhook_secret=os.getenv("GITLAB_WEBHOOK_SECRET", ""),
         gitlab_base_url=os.getenv("GITLAB_BASE_URL", "https://gitlab.com"),
         gitlab_token=os.getenv("GITLAB_TOKEN", ""),
+        google_oauth_client_id=os.getenv("GOOGLE_OAUTH_CLIENT_ID", ""),
+        google_oauth_client_secret=os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", ""),
+        google_oauth_redirect_uri=os.getenv("GOOGLE_OAUTH_REDIRECT_URI", ""),
+        gitlab_oauth_client_id=os.getenv("GITLAB_OAUTH_CLIENT_ID", ""),
+        gitlab_oauth_client_secret=os.getenv("GITLAB_OAUTH_CLIENT_SECRET", ""),
+        gitlab_oauth_redirect_uri=os.getenv("GITLAB_OAUTH_REDIRECT_URI", ""),
+        oauth_token_encryption_key=os.getenv("OAUTH_TOKEN_ENCRYPTION_KEY", ""),
+        oauth_state_ttl_minutes=_int_env("OAUTH_STATE_TTL_MINUTES", 15),
         slack_webhook_url=os.getenv("SLACK_WEBHOOK_URL", ""),
         slack_signing_secret=os.getenv("SLACK_SIGNING_SECRET", ""),
         slack_bot_token=os.getenv("SLACK_BOT_TOKEN", ""),
         slack_default_channel=os.getenv("SLACK_DEFAULT_CHANNEL", ""),
+        slack_oauth_client_id=os.getenv("SLACK_OAUTH_CLIENT_ID", ""),
+        slack_oauth_client_secret=os.getenv("SLACK_OAUTH_CLIENT_SECRET", ""),
+        slack_oauth_redirect_uri=os.getenv("SLACK_OAUTH_REDIRECT_URI", ""),
         dry_run_actions=_bool_env("DRY_RUN_ACTIONS", True),
         dispatch_actions=_bool_env("DISPATCH_ACTIONS", True),
         gemini_enabled=_bool_env("GEMINI_ENABLED", False),
