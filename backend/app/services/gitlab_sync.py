@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy import desc, select
@@ -8,6 +9,9 @@ from app.config import get_settings
 from app.integrations.gitlab import GitLabClient
 from app.memory.repository import OperationalMemory
 from app.services.repo_context import RepoContextService
+
+
+SECRET_LINE_RE = re.compile(r"(secret|token|password|passwd|private[_-]?key|api[_-]?key|client[_-]?secret)", re.IGNORECASE)
 
 
 class GitLabProjectSyncService:
@@ -82,6 +86,14 @@ class GitLabProjectSyncService:
             self.db.commit()
 
         return run
+
+    def refresh_pipeline_jobs(self, project: models.GitLabProject, pipeline_id: str, *, job_limit: int = 50) -> list[models.JobSnapshot]:
+        jobs = self.client.get_pipeline_jobs(project.project_path, pipeline_id)
+        snapshots: list[models.JobSnapshot] = []
+        for job in jobs[:job_limit]:
+            snapshots.append(self._upsert_job_for_pipeline_id(project, pipeline_id, job))
+        self.db.commit()
+        return snapshots
 
     def _upsert_project(self, item: dict) -> models.GitLabProject:
         gitlab_project_id = str(item.get("id") or "")
@@ -281,6 +293,9 @@ class GitLabProjectSyncService:
         return snapshot
 
     def _upsert_job(self, project: models.GitLabProject, pipeline: models.PipelineSnapshot, item: dict) -> models.JobSnapshot:
+        return self._upsert_job_for_pipeline_id(project, pipeline.pipeline_id, item)
+
+    def _upsert_job_for_pipeline_id(self, project: models.GitLabProject, pipeline_id: str, item: dict) -> models.JobSnapshot:
         job_id = str(item.get("id") or "")
         snapshot = self.db.scalar(
             select(models.JobSnapshot)
@@ -292,7 +307,7 @@ class GitLabProjectSyncService:
             snapshot = models.JobSnapshot(
                 gitlab_project_id=project.gitlab_project_id,
                 project_path=project.project_path,
-                pipeline_id=pipeline.pipeline_id,
+                pipeline_id=pipeline_id,
                 job_id=job_id,
                 workspace_id=project.workspace_id,
             )
@@ -300,17 +315,32 @@ class GitLabProjectSyncService:
 
         snapshot.workspace_id = project.workspace_id
         snapshot.project_path = project.project_path
-        snapshot.pipeline_id = pipeline.pipeline_id
+        snapshot.pipeline_id = pipeline_id
         snapshot.name = str(item.get("name") or "")
         snapshot.stage = str(item.get("stage") or "")
         snapshot.status = str(item.get("status") or "")
         snapshot.failure_reason = str(item.get("failure_reason") or "")
+        trace = self._fetch_job_trace(project.project_path, job_id)
+        if trace:
+            classification = classify_job_trace(trace)
+            snapshot.failure_signature = classification["signature"]
+            snapshot.trace_summary = classification["summary"]
+            snapshot.trace_excerpt = classification["excerpt"]
+            snapshot.trace_fetched_at = _now()
         snapshot.web_url = str(item.get("web_url") or "")
         snapshot.duration = item.get("duration")
         snapshot.created_at_gitlab = _parse_gitlab_datetime(item.get("created_at"))
         snapshot.synced_at = _now()
         self.db.flush()
         return snapshot
+
+    def _fetch_job_trace(self, project_path: str, job_id: str) -> str:
+        if not job_id:
+            return ""
+        try:
+            return self.client.get_job_trace(project_path, job_id)
+        except Exception:
+            return ""
 
 
 def _parse_gitlab_datetime(value: str | None) -> datetime | None:
@@ -341,6 +371,59 @@ def _pipeline_likely_cause(pipeline: dict) -> str:
     pipeline_id = str(pipeline.get("id") or "")
     ref = str(pipeline.get("ref") or "unknown ref")
     return f"GitLab reported pipeline #{pipeline_id} failed on {ref}. No failed job trace has been classified yet."
+
+
+def classify_job_trace(trace: str) -> dict[str, str]:
+    excerpt = _redacted_trace_excerpt(trace)
+    lowered = excerpt.lower()
+    signature = "unknown_failure"
+    summary = "The failed job trace was fetched, but Panopticon could not classify a specific failure signature."
+
+    patterns = [
+        ("timeout", ["timed out", "timeout", "deadline exceeded", "context deadline", "operation timed out"], "The job appears to have timed out or exceeded an external wait limit."),
+        ("docker_build", ["docker build", "failed to solve", "buildx", "error building image"], "The job failed while building a container image."),
+        ("auth_or_permission", ["permission denied", "unauthorized", "forbidden", "authentication failed", "access denied"], "The job failed because of an authentication or permission error."),
+        ("deployment_failure", ["kubectl", "helm", "rollout", "deployment", "terraform apply", "terraform validate", "unsupported argument"], "The job failed during deployment or infrastructure execution."),
+        ("dependency_install", ["could not resolve", "dependency", "npm err!", "pip install", "poetry install", "bundle install"], "The job failed while installing or resolving dependencies."),
+        ("lint_or_static_analysis", ["lint", "eslint", "ruff", "flake8", "mypy", "black --check"], "The job failed during linting or static analysis."),
+        ("test_failure", ["failed tests", "assertionerror", "pytest", "jest", "rspec", "expected", "test failed"], "The job failed during automated tests. Inspect the first failing assertion or test case."),
+    ]
+    for candidate, needles, candidate_summary in patterns:
+        if any(needle in lowered for needle in needles):
+            signature = candidate
+            summary = candidate_summary
+            break
+
+    failing_line = _first_failing_line(excerpt)
+    if failing_line:
+        summary = f"{summary} First relevant log line: {failing_line}"
+
+    return {"signature": signature, "summary": summary[:1000], "excerpt": excerpt}
+
+
+def _redacted_trace_excerpt(trace: str, max_chars: int = 8000) -> str:
+    lines = []
+    for line in trace.splitlines():
+        clean = line.rstrip()
+        if SECRET_LINE_RE.search(clean) and (":" in clean or "=" in clean):
+            lines.append("[REDACTED SECRET-LIKE LOG LINE]")
+        else:
+            lines.append(clean)
+    text = "\n".join(lines).strip()
+    if len(text) <= max_chars:
+        return text
+    return text[-max_chars:]
+
+
+def _first_failing_line(excerpt: str) -> str:
+    for line in excerpt.splitlines():
+        clean = line.strip()
+        lowered = clean.lower()
+        if not clean:
+            continue
+        if any(token in lowered for token in ["error", "failed", "fatal", "assertionerror", "timed out", "permission denied"]):
+            return clean[:240]
+    return ""
 
 
 def _pipeline_evidence(pipeline: dict) -> list[str]:

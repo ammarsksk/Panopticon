@@ -255,9 +255,13 @@ class JobSnapshot(Base):
     stage: Mapped[str] = mapped_column(String(120), default="")
     status: Mapped[str] = mapped_column(String(40), default="", index=True)
     failure_reason: Mapped[str] = mapped_column(String(255), default="")
+    failure_signature: Mapped[str] = mapped_column(String(255), default="", index=True)
+    trace_summary: Mapped[str] = mapped_column(Text, default="")
+    trace_excerpt: Mapped[str] = mapped_column(Text, default="")
     web_url: Mapped[str] = mapped_column(String(500), default="")
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at_gitlab: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    trace_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
 

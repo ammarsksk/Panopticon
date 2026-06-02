@@ -10,6 +10,7 @@ from app.main import app
 from app.models import ActionDispatch, GitLabProject, IncidentRecord, JobSnapshot, MemoryRecord, MergeRequestSnapshot, PipelineInsight, PipelineSnapshot, Recommendation, RepoFileIndex, RiskAssessment, User, Workspace
 from app.services.auth import RequestContext, get_current_context
 from app.services.gitlab_sync import GitLabProjectSyncService
+from app.services.agent_tools import AgentToolService
 from app.integrations.gitlab import _dedupe_projects
 
 
@@ -78,6 +79,11 @@ class FakeGitLabClient:
             }
         ]
 
+    def get_job_trace(self, project_path, job_id):
+        assert project_path == "demo/checkout-service"
+        assert job_id == "333"
+        return "Running pytest\nERROR tests/test_checkout.py::test_payment_timeout failed after gateway timeout\nAPI_TOKEN=secret-value\n"
+
     def list_repository_tree(self, project_path, ref, recursive=True, limit=100):
         assert project_path == "demo/checkout-service"
         assert ref == "main"
@@ -137,6 +143,64 @@ def test_gitlab_project_sync_persists_projects_mrs_pipelines_and_failed_jobs():
     assert project.failed_pipelines_count == 1
     assert project.latest_pipeline_status == "failed"
     assert "REDACTED" in db.query(RepoFileIndex).filter(RepoFileIndex.file_path == "services/checkout/auth.py").one().content_excerpt
+    job = db.query(JobSnapshot).one()
+    assert job.failure_signature in {"timeout", "test_failure"}
+    assert "test_payment_timeout" in job.trace_summary
+    assert "REDACTED" in job.trace_excerpt
+
+
+def test_pipeline_job_trace_refresh_can_run_on_demand():
+    db = _session()
+    project = GitLabProject(
+        gitlab_project_id="101",
+        project_path="demo/checkout-service",
+        name="checkout-service",
+        namespace="demo",
+        web_url="https://gitlab.com/demo/checkout-service",
+        default_branch="main",
+    )
+    db.add(project)
+    db.commit()
+
+    jobs = GitLabProjectSyncService(db, client=FakeGitLabClient()).refresh_pipeline_jobs(project, "9001")
+
+    assert len(jobs) == 1
+    assert jobs[0].job_id == "333"
+    assert jobs[0].trace_summary
+    assert jobs[0].failure_signature in {"timeout", "test_failure"}
+    db.close()
+
+
+def test_mcp_pipeline_job_trace_refresh_tool_uses_project_scope():
+    db = _session()
+    project = GitLabProject(
+        workspace_id=7,
+        gitlab_project_id="101",
+        project_path="demo/checkout-service",
+        name="checkout-service",
+        namespace="demo",
+        web_url="https://gitlab.com/demo/checkout-service",
+        default_branch="main",
+    )
+    db.add(project)
+    db.commit()
+
+    service = AgentToolService(db, workspace_id=7)
+    service_client = FakeGitLabClient()
+    original = GitLabProjectSyncService.__init__
+
+    def fake_init(self, db, client=None, workspace_id=None):
+        original(self, db, client=service_client, workspace_id=workspace_id)
+
+    GitLabProjectSyncService.__init__ = fake_init
+    try:
+        result = service.call_tool("refresh_pipeline_job_traces", {"project_id": project.id, "pipeline_id": "9001"})
+    finally:
+        GitLabProjectSyncService.__init__ = original
+        db.close()
+
+    assert result["jobs"][0]["job_id"] == "333"
+    assert result["jobs"][0]["trace_summary"]
 
 
 def test_project_listing_dedupes_membership_and_owned_projects():
@@ -232,6 +296,7 @@ def test_projects_api_returns_synced_project_summary():
     assert summary["open_merge_requests"][0]["merge_request_iid"] == "7"
     assert summary["latest_pipelines"][0]["status"] == "failed"
     assert summary["failed_jobs"][0]["name"] == "test"
+    assert summary["failed_jobs"][0]["trace_summary"]
     assert any(item["score"] == 85 for item in summary["active_risks"])
     assert summary["recent_incidents"][0]["title"] == "Checkout rollback"
     assert summary["latest_recommendations"][0]["title"] == "Deployment risk detected"

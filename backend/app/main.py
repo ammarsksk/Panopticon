@@ -244,6 +244,13 @@ def list_project_jobs(project_id: int, db: Session = Depends(get_db), context: R
     ).all()
 
 
+@app.post("/api/projects/{project_id}/pipelines/{pipeline_id}/jobs/refresh", response_model=list[schemas.JobSnapshotOut])
+def refresh_pipeline_jobs(project_id: int, pipeline_id: str, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    project = _get_project_or_404(db, project_id, context)
+    client = gitlab_client_for_workspace(db, context.workspace.id)
+    return GitLabProjectSyncService(db, client=client, workspace_id=context.workspace.id).refresh_pipeline_jobs(project, pipeline_id, job_limit=max(1, min(limit, 100)))
+
+
 @app.post("/api/projects/{project_id}/repo-index/refresh", response_model=schemas.RepoIndexRunOut)
 def refresh_project_repo_index(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     project = _get_project_or_404(db, project_id, context)

@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from app import models
 from app.services.agent_actions import AgentActionService
 from app.services.fix_plans import FixPlanService
+from app.services.gitlab_sync import GitLabProjectSyncService
 from app.services.grounded_recommendations import GroundedRecommendationEngine
 from app.services.metrics import MetricsService
 from app.services.observability import ObservabilityService
+from app.services.oauth import gitlab_client_for_workspace
 from app.services.repo_context import RepoContextService
 
 
@@ -37,6 +39,11 @@ class AgentToolService:
                 "get_pipeline_context",
                 "Fetch recent pipeline snapshots, failed jobs, and parsed pipeline insights.",
                 {"project_id": "integer", "project_path": "string", "limit": "integer"},
+            ),
+            _tool(
+                "refresh_pipeline_job_traces",
+                "Fetch jobs and redacted failed-job traces for one GitLab pipeline, then store classified trace summaries.",
+                {"project_id": "integer", "project_path": "string", "pipeline_id": "string", "limit": "integer"},
             ),
             _tool(
                 "get_risk_context",
@@ -145,6 +152,15 @@ class AgentToolService:
             return self.project_summary(project=project, limit=limit)
         if name == "get_pipeline_context":
             return self.pipeline_context(project=project, limit=limit)
+        if name == "refresh_pipeline_job_traces":
+            if not project:
+                raise LookupError("Project is required to refresh pipeline job traces")
+            pipeline_id = str(args.get("pipeline_id") or "")
+            if not pipeline_id:
+                raise LookupError("pipeline_id is required")
+            client = gitlab_client_for_workspace(self.db, self.workspace_id) if self.workspace_id is not None else None
+            jobs = GitLabProjectSyncService(self.db, client=client, workspace_id=self.workspace_id).refresh_pipeline_jobs(project, pipeline_id, job_limit=limit)
+            return {"jobs": [_record("failed_jobs" if job.status == "failed" else "jobs", job) for job in jobs]}
         if name == "get_risk_context":
             return self.risk_context(project=project, limit=limit)
         if name == "get_action_context":
@@ -455,6 +471,9 @@ def _record(kind: str, record: Any) -> dict[str, Any]:
         "stage",
         "status",
         "failure_reason",
+        "failure_signature",
+        "trace_summary",
+        "trace_excerpt",
         "likely_cause",
         "summary",
         "score",

@@ -198,9 +198,13 @@ class JobSnapshotOut(BaseModel):
     stage: str
     status: str
     failure_reason: str
+    failure_signature: str = ""
+    trace_summary: str = ""
+    trace_excerpt: str = ""
     web_url: str
     duration: float | None
     created_at_gitlab: datetime | None
+    trace_fetched_at: datetime | None = None
     synced_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

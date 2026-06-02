@@ -48,3 +48,12 @@ cd C:\Users\LENOVO\Downloads\Panopticon
 python scripts/smoke_agent_runtime.py --list-tools
 python scripts/smoke_agent_runtime.py --question "Which risks should I inspect first?"
 ```
+
+## 4. Seed Strategic Showcase Data
+
+Run this when you want reliable demo projects with real failed jobs, classified traces, repo context, incidents, actions, and fix plans.
+
+```powershell
+cd C:\Users\LENOVO\Downloads\Panopticon\backend
+python -m app.scripts.seed_showcase
+```

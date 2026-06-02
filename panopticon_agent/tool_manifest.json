@@ -16,6 +16,7 @@
     "search_projects",
     "get_project_summary",
     "get_pipeline_context",
+    "refresh_pipeline_job_traces",
     "get_risk_context",
     "get_action_context",
     "get_chat_context",

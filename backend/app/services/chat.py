@@ -213,6 +213,8 @@ class ChatService:
         if failed_jobs:
             job = failed_jobs[0]
             parts.append(f"- Most recent failed job: {job.name} in stage {job.stage}, reason {job.failure_reason or job.status}.")
+            if job.trace_summary:
+                parts.append(f"- Job trace classification: {job.trace_summary}")
 
         if merge_requests:
             mr = merge_requests[0]
@@ -260,7 +262,11 @@ class ChatService:
         elif failed_jobs:
             job = failed_jobs[0]
             parts.append(f"- The most recent failed job is {job.name} in stage {job.stage}. GitLab reported {job.failure_reason or job.status}.")
-            parts.append("- Next action: open the failed job log and inspect the first failing command or timeout boundary.")
+            if job.trace_summary:
+                parts.append(f"- Classified job trace: {job.trace_summary}")
+                parts.append(f"- Failure signature: {job.failure_signature or 'unknown_failure'}.")
+            else:
+                parts.append("- Next action: open the failed job log and inspect the first failing command or timeout boundary.")
         elif pipelines:
             latest = pipelines[0]
             failed_count = len([pipeline for pipeline in pipelines if pipeline.status == "failed"])
@@ -444,7 +450,7 @@ def _citation(kind: str, record) -> dict:
         summary = record.likely_cause
     elif isinstance(record, models.JobSnapshot):
         label = f"Job {record.name}"
-        summary = f"{record.status}; {record.failure_reason or 'no failure reason'}"
+        summary = record.trace_summary or f"{record.status}; {record.failure_reason or 'no failure reason'}"
     elif isinstance(record, models.MergeRequestSnapshot):
         label = f"MR !{record.merge_request_iid}: {record.title}"
         summary = f"{record.source_branch} -> {record.target_branch}; {record.state}"
@@ -533,6 +539,9 @@ def _record_evidence(kind: str, record) -> dict:
                 "stage": record.stage,
                 "status": record.status,
                 "failure_reason": record.failure_reason,
+                "failure_signature": record.failure_signature,
+                "trace_summary": record.trace_summary,
+                "trace_excerpt": record.trace_excerpt[:1200] if record.trace_excerpt else "",
                 "duration": record.duration,
                 "web_url": record.web_url,
             }

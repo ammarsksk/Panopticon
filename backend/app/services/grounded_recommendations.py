@@ -206,11 +206,13 @@ def _record_to_evidence(kind: str, record: Any) -> dict[str, Any]:
         base.update(
             {
                 "label": f"Job {record.name}",
-                "summary": f"{record.status}; {record.failure_reason or 'no failure reason'}",
+                "summary": record.trace_summary or f"{record.status}; {record.failure_reason or 'no failure reason'}",
                 "pipeline_id": record.pipeline_id,
                 "job_id": record.job_id,
                 "stage": record.stage,
-                "details": [record.web_url] if record.web_url else [],
+                "failure_signature": record.failure_signature,
+                "trace_excerpt": record.trace_excerpt[:1200] if record.trace_excerpt else "",
+                "details": [item for item in [record.web_url, record.trace_summary] if item],
             }
         )
     elif isinstance(record, models.PipelineSnapshot):

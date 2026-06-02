@@ -2,16 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Bot, Send, Square } from "lucide-react";
-import { AiIntegrationStatus, ChatMessage, ChatThread, GitLabProject, getChatMessages, sendChatMessage } from "@/lib/api";
+import { AiIntegrationStatus, ChatMessage, ChatThread, GitLabProject, PipelineSnapshot, ProjectSummary, getChatMessages, getProjectSummary, sendChatMessage } from "@/lib/api";
 
 function Badge({ label }: { label: string }) {
   return <span className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold uppercase text-slate-600">{label}</span>;
+}
+
+function PipelineStatus({ status }: { status: string }) {
+  const tone = status === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "failed" ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-700";
+  return <span className={`border px-2 py-0.5 text-[11px] font-semibold uppercase ${tone}`}>{status || "unknown"}</span>;
 }
 
 export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabProject[]; threads: ChatThread[]; aiStatus: AiIntegrationStatus }) {
   const [projectId, setProjectId] = useState(projects[0]?.id ?? 0);
   const [threadId, setThreadId] = useState<number | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [projectSummary, setProjectSummary] = useState<ProjectSummary | null>(null);
+  const [pipelinesLoading, setPipelinesLoading] = useState(false);
   const [preparedActions, setPreparedActions] = useState<number[]>([]);
   const [preparedFixPlans, setPreparedFixPlans] = useState<number[]>([]);
   const [typingContent, setTypingContent] = useState<Record<number, string>>({});
@@ -27,6 +34,28 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
       .then(setMessages)
       .catch(() => setMessages([]));
   }, [threadId]);
+
+  useEffect(() => {
+    if (!projectId) {
+      setProjectSummary(null);
+      return;
+    }
+    let cancelled = false;
+    setPipelinesLoading(true);
+    getProjectSummary(projectId)
+      .then((summary) => {
+        if (!cancelled) setProjectSummary(summary);
+      })
+      .catch(() => {
+        if (!cancelled) setProjectSummary(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPipelinesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   useEffect(() => {
     return () => {
@@ -120,6 +149,10 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
     setBusy(false);
   }
 
+  function askAboutPipeline(pipeline: PipelineSnapshot) {
+    setInput(`Analyze pipeline #${pipeline.pipeline_id} on ${pipeline.ref}. Why did it ${pipeline.status}, what evidence do we have, and what should I inspect next?`);
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
       <aside className="space-y-4">
@@ -158,6 +191,42 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-semibold uppercase text-slate-500">Pipeline Navigator</div>
+            <Badge label={projectSummary ? `${projectSummary.latest_pipelines.length}` : projectId ? "Loading" : "Project"} />
+          </div>
+          {!projectId ? (
+            <p className="mt-3 text-sm text-slate-500">Select one project to inspect individual pipelines.</p>
+          ) : pipelinesLoading ? (
+            <div className="mt-3 flex items-center gap-1 py-2" aria-label="Loading pipelines">
+              <span className="h-2 w-2 animate-bounce rounded-full bg-teal-700 [animation-delay:-0.24s]" />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-teal-700 [animation-delay:-0.12s]" />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-teal-700" />
+            </div>
+          ) : projectSummary?.latest_pipelines.length ? (
+            <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
+              {projectSummary.latest_pipelines.map((pipeline) => (
+                <button
+                  key={pipeline.id}
+                  type="button"
+                  onClick={() => askAboutPipeline(pipeline)}
+                  className="block w-full border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-teal-300 hover:bg-teal-50"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-slate-900">#{pipeline.pipeline_id}</span>
+                    <PipelineStatus status={pipeline.status} />
+                  </div>
+                  <div className="mt-1 truncate text-xs text-slate-600">{pipeline.ref || "no ref"}</div>
+                  <div className="mt-2 text-xs font-semibold uppercase text-teal-700">Ask about this pipeline</div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">No synced pipelines for this project yet.</p>
+          )}
         </div>
 
         <div className="border border-slate-200 bg-white p-4">
