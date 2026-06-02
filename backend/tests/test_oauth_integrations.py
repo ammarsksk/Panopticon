@@ -70,6 +70,26 @@ def test_gitlab_workspace_token_builds_bearer_client():
         db.close()
 
 
+def test_gitlab_auth_url_uses_minimal_api_scopes():
+    db = _session()
+    try:
+        service = OAuthService(db)
+        service.settings = replace(
+            service.settings,
+            gitlab_oauth_client_id="gitlab-client",
+            gitlab_oauth_client_secret="gitlab-secret",
+            gitlab_oauth_redirect_uri="http://localhost:8000/api/integrations/gitlab/callback",
+            gitlab_oauth_scopes=["api", "read_user"],
+        )
+
+        url = service.gitlab_auth_url(user_id=1, workspace_id=1)
+
+        assert "scope=api+read_user" in url
+        assert "write_repository" not in url
+    finally:
+        db.close()
+
+
 def test_encrypt_decrypt_token_roundtrip_in_local_development():
     encrypted = encrypt_token("secret-token")
 

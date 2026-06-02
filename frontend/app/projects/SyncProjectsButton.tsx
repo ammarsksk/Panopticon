@@ -13,9 +13,13 @@ export function SyncProjectsButton() {
     setMessage("");
     try {
       const result = await syncGitLabProjects();
-      if (result.status === "completed") {
+      if (result.status === "completed" || result.status === "completed_with_errors") {
         setState("completed");
-        setMessage(`Synced ${result.projects_updated} project${result.projects_updated === 1 ? "" : "s"}. Refreshing...`);
+        setMessage(
+          result.projects_updated
+            ? `Synced ${result.projects_updated} project${result.projects_updated === 1 ? "" : "s"}. Refreshing...`
+            : result.error || "GitLab returned no accessible projects. Refreshing..."
+        );
         window.setTimeout(() => window.location.reload(), 700);
       } else {
         setState("failed");

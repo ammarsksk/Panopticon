@@ -517,6 +517,81 @@ managed-runtime smoke test
 agent tracing metadata
 ```
 
+### Implemented Phase 8 Shape
+
+Panopticon now includes a dedicated managed-agent package:
+
+```text
+panopticon_agent/
+  agent.py                 Agent Engine entrypoint exposing root_agent
+  runtime.py               query/list_tools/call_tool/smoke_check runtime
+  tools.py                 MCP JSON-RPC client for the FastAPI backend
+  prompts.py               Panopticon agent instructions
+  schemas.py               runtime request/response dataclasses
+  tool_manifest.json       governed tool contract
+```
+
+The managed runtime calls FastAPI through `/mcp` using:
+
+```text
+Authorization: Bearer ${PANOPTICON_AGENT_TOKEN}
+X-Panopticon-Agent-Runtime: vertex-agent-engine
+X-Panopticon-Agent-Trace-Id: ${trace_id}
+```
+
+FastAPI accepts this only when the bearer token matches:
+
+```text
+AGENT_RUNTIME_TOKEN
+```
+
+The token resolves to:
+
+```text
+AGENT_RUNTIME_WORKSPACE_SLUG
+AGENT_RUNTIME_USER_EMAIL
+```
+
+Every MCP `tools/call` request is written to `audit_logs` with event type:
+
+```text
+agent.tool_call
+```
+
+Deployment assets:
+
+```text
+requirements-agent.txt
+scripts/deploy_agent_engine.py
+scripts/smoke_agent_runtime.py
+```
+
+Local smoke test:
+
+```powershell
+$env:PANOPTICON_API_BASE_URL="http://127.0.0.1:8000"
+$env:PANOPTICON_AGENT_TOKEN="<same value as backend AGENT_RUNTIME_TOKEN>"
+python scripts/smoke_agent_runtime.py --list-tools
+python scripts/smoke_agent_runtime.py --question "Which risks should I inspect first?"
+```
+
+Agent Engine dry-run:
+
+```powershell
+$env:GOOGLE_CLOUD_PROJECT="panopticon-495816"
+$env:GOOGLE_CLOUD_LOCATION="us-central1"
+$env:PANOPTICON_API_BASE_URL="https://YOUR_BACKEND_DOMAIN"
+$env:PANOPTICON_AGENT_TOKEN="<same value as backend AGENT_RUNTIME_TOKEN>"
+python scripts/deploy_agent_engine.py --dry-run
+```
+
+Agent Engine deploy:
+
+```powershell
+python -m pip install -r requirements-agent.txt
+python scripts/deploy_agent_engine.py
+```
+
 ### Acceptance Criteria
 
 - Local FastAPI chat still works.

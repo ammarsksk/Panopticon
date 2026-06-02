@@ -1,10 +1,13 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.config import get_settings
 from app.integrations.gitlab import GitLabClient
+from app.memory.repository import OperationalMemory
+from app.services.repo_context import RepoContextService
 
 
 class GitLabProjectSyncService:
@@ -12,6 +15,7 @@ class GitLabProjectSyncService:
         self.db = db
         self.client = client or GitLabClient()
         self.workspace_id = workspace_id
+        self.settings = get_settings()
 
     def sync(self, *, limit: int = 50, merge_request_limit: int = 20, pipeline_limit: int = 10, job_limit: int = 20) -> models.ProjectSyncRun:
         run = models.ProjectSyncRun(status="running", workspace_id=self.workspace_id)
@@ -57,6 +61,12 @@ class GitLabProjectSyncService:
                     latest_pipeline = pipelines[0] if pipelines else {}
                     project.latest_pipeline_id = str(latest_pipeline.get("id") or "")
                     project.latest_pipeline_status = str(latest_pipeline.get("status") or "")
+                    self._refresh_dashboard_intelligence(project=project, merge_requests=merge_requests, pipelines=pipelines)
+                    if self.settings.repo_index_on_sync:
+                        RepoContextService(self.db, client=self.client, workspace_id=self.workspace_id).index_project(
+                            project,
+                            limit=self.settings.repo_index_file_limit,
+                        )
                 except Exception as exc:
                     errors.append(f"{project_path}: {exc}")
                 finally:
@@ -136,6 +146,111 @@ class GitLabProjectSyncService:
         self.db.flush()
         return snapshot
 
+    def _refresh_dashboard_intelligence(self, *, project: models.GitLabProject, merge_requests: list[dict], pipelines: list[dict]) -> None:
+        memory = OperationalMemory(self.db, workspace_id=self.workspace_id)
+        failed_pipelines = [pipeline for pipeline in pipelines if pipeline.get("status") == "failed"]
+
+        for pipeline in failed_pipelines[:5]:
+            pipeline_id = str(pipeline.get("id") or "")
+            if not pipeline_id or self._pipeline_insight_exists(project.project_path, pipeline_id):
+                continue
+            insight = memory.add_pipeline_insight(
+                event_id=None,
+                project_path=project.project_path,
+                pipeline_id=pipeline_id,
+                status="failed",
+                likely_cause=_pipeline_likely_cause(pipeline),
+                evidence=_pipeline_evidence(pipeline),
+                recommendations=[
+                    "Open the failed pipeline and inspect failed jobs or logs.",
+                    "Check recent merge request changes on the same branch.",
+                    "Retry only after confirming the failure is not deterministic.",
+                ],
+            )
+            memory.add_recommendation(
+                project_path=project.project_path,
+                source_type="pipeline",
+                source_id=str(insight.id),
+                channel="slack",
+                status="pending",
+                message=(
+                    f"Pipeline failure detected for {project.project_path}: {insight.likely_cause}\n\n"
+                    "Next action: inspect failed jobs, compare the latest merge request changes, and confirm whether a retry is safe."
+                ),
+            )
+
+        for merge_request in merge_requests[:10]:
+            merge_request_iid = str(merge_request.get("iid") or merge_request.get("id") or "")
+            if not merge_request_iid:
+                continue
+            if not self._mr_signal_exists(project.project_path, merge_request_iid):
+                signal = memory.add_mr_signal(
+                    project_path=project.project_path,
+                    merge_request_iid=merge_request_iid,
+                    title=str(merge_request.get("title") or "Open merge request"),
+                    state=str(merge_request.get("state") or "opened"),
+                    age_hours=_hours_since(merge_request.get("created_at")),
+                    unresolved_threads=int(merge_request.get("unresolved_discussions_count") or 0),
+                    reviewer_count=len(merge_request.get("reviewers") or []),
+                    bottleneck_level="blocked" if failed_pipelines else "review",
+                    summary=_mr_summary(project, merge_request, failed_pipelines),
+                )
+                if signal.bottleneck_level == "blocked":
+                    memory.add_recommendation(
+                        project_path=project.project_path,
+                        source_type="merge_request",
+                        source_id=str(signal.id),
+                        channel="dashboard",
+                        status="pending",
+                        message=f"Merge request !{merge_request_iid} is blocked by failed pipeline activity. Review pipeline evidence before merging.",
+                    )
+
+            if not self._risk_exists(project.project_path, merge_request_iid):
+                score = 78 if failed_pipelines else 55
+                level = "high" if score >= 70 else "medium"
+                risk = memory.add_risk(
+                    event_id=None,
+                    project_path=project.project_path,
+                    merge_request_iid=merge_request_iid,
+                    deployment_ref=str(merge_request.get("source_branch") or ""),
+                    score=score,
+                    level=level,
+                    summary=_risk_summary(project, merge_request, failed_pipelines),
+                    reasons=_risk_reasons(project, merge_request, failed_pipelines),
+                    recommendations=[
+                        "Review the merge request alongside the latest pipeline result.",
+                        "Require owner review before merging if the failed pipeline is related to this branch.",
+                        "Add or confirm automated coverage for the touched service path.",
+                    ],
+                )
+                if score >= 70:
+                    memory.add_recommendation(
+                        project_path=project.project_path,
+                        source_type="risk",
+                        source_id=str(risk.id),
+                        channel="gitlab_comment",
+                        status="pending",
+                        message=f"{risk.summary} {' '.join(risk.recommendations)}",
+                    )
+
+    def _pipeline_insight_exists(self, project_path: str, pipeline_id: str) -> bool:
+        stmt = select(models.PipelineInsight).where(models.PipelineInsight.project_path == project_path).where(models.PipelineInsight.pipeline_id == pipeline_id)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.PipelineInsight.workspace_id == self.workspace_id)
+        return self.db.scalar(stmt) is not None
+
+    def _mr_signal_exists(self, project_path: str, merge_request_iid: str) -> bool:
+        stmt = select(models.MergeRequestSignal).where(models.MergeRequestSignal.project_path == project_path).where(models.MergeRequestSignal.merge_request_iid == merge_request_iid)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.MergeRequestSignal.workspace_id == self.workspace_id)
+        return self.db.scalar(stmt.order_by(desc(models.MergeRequestSignal.created_at)).limit(1)) is not None
+
+    def _risk_exists(self, project_path: str, merge_request_iid: str) -> bool:
+        stmt = select(models.RiskAssessment).where(models.RiskAssessment.project_path == project_path).where(models.RiskAssessment.merge_request_iid == merge_request_iid)
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.RiskAssessment.workspace_id == self.workspace_id)
+        return self.db.scalar(stmt.order_by(desc(models.RiskAssessment.created_at)).limit(1)) is not None
+
     def _upsert_pipeline(self, project: models.GitLabProject, item: dict) -> models.PipelineSnapshot:
         pipeline_id = str(item.get("id") or "")
         snapshot = self.db.scalar(
@@ -213,3 +328,53 @@ def _parse_gitlab_datetime(value: str | None) -> datetime | None:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _hours_since(value: str | None) -> float:
+    parsed = _parse_gitlab_datetime(value)
+    if not parsed:
+        return 0.0
+    return max(0.0, (_now() - parsed).total_seconds() / 3600)
+
+
+def _pipeline_likely_cause(pipeline: dict) -> str:
+    pipeline_id = str(pipeline.get("id") or "")
+    ref = str(pipeline.get("ref") or "unknown ref")
+    return f"GitLab reported pipeline #{pipeline_id} failed on {ref}. No failed job trace has been classified yet."
+
+
+def _pipeline_evidence(pipeline: dict) -> list[str]:
+    evidence = [f"Pipeline status: {pipeline.get('status') or 'unknown'}"]
+    if pipeline.get("ref"):
+        evidence.append(f"Ref: {pipeline['ref']}")
+    if pipeline.get("sha"):
+        evidence.append(f"Commit SHA: {pipeline['sha']}")
+    if pipeline.get("web_url"):
+        evidence.append(f"Pipeline URL: {pipeline['web_url']}")
+    return evidence
+
+
+def _mr_summary(project: models.GitLabProject, merge_request: dict, failed_pipelines: list[dict]) -> str:
+    title = str(merge_request.get("title") or "Open merge request")
+    if failed_pipelines:
+        return f"!{merge_request.get('iid') or merge_request.get('id')} {title} needs review because {project.project_path} has recent failed pipeline activity."
+    return f"!{merge_request.get('iid') or merge_request.get('id')} {title} is open and awaiting review."
+
+
+def _risk_summary(project: models.GitLabProject, merge_request: dict, failed_pipelines: list[dict]) -> str:
+    title = str(merge_request.get("title") or "Open merge request")
+    if failed_pipelines:
+        return f"Delivery risk is high for {project.project_path}!{merge_request.get('iid') or merge_request.get('id')} because recent pipeline activity failed while the merge request is open."
+    return f"Delivery risk is medium for {project.project_path}!{merge_request.get('iid') or merge_request.get('id')} because an open merge request may affect delivery flow."
+
+
+def _risk_reasons(project: models.GitLabProject, merge_request: dict, failed_pipelines: list[dict]) -> list[str]:
+    reasons = [
+        f"Open merge request: !{merge_request.get('iid') or merge_request.get('id')} {merge_request.get('title') or ''}".strip(),
+        f"Source branch: {merge_request.get('source_branch') or 'unknown'}",
+    ]
+    if failed_pipelines:
+        reasons.append(f"{len(failed_pipelines)} recent failed pipeline(s) are present for {project.project_path}.")
+    if project.default_branch:
+        reasons.append(f"Default branch: {project.default_branch}")
+    return reasons

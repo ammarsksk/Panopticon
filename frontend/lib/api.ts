@@ -85,8 +85,11 @@ export type DashboardSummary = {
   failed_pipelines: number;
   blocked_merge_requests: number;
   open_incidents: number;
+  synced_projects: number;
+  latest_project_sync: ProjectSyncRun | null;
   latest_recommendations: Recommendation[];
   slack_status: SlackStatus;
+  gitlab_status: OAuthIntegrationStatus;
 };
 
 export type GitLabProject = {
@@ -119,6 +122,49 @@ export type ProjectSyncRun = {
   error: string;
   started_at: string;
   finished_at: string | null;
+};
+
+export type RepoIndexRun = {
+  id: number;
+  project_id: number | null;
+  project_path: string;
+  ref: string;
+  status: string;
+  files_seen: number;
+  files_indexed: number;
+  files_skipped: number;
+  error: string;
+  started_at: string;
+  finished_at: string | null;
+};
+
+export type RepoFileIndex = {
+  id: number;
+  project_id: number | null;
+  project_path: string;
+  file_path: string;
+  ref: string;
+  file_type: string;
+  language: string;
+  size_bytes: number;
+  content_sha: string;
+  last_commit_id: string;
+  content_excerpt: string;
+  signals: {
+    file_type?: string;
+    language?: string;
+    risk_flags?: string[];
+    [key: string]: unknown;
+  };
+  indexed_at: string;
+};
+
+export type RepoContextSummary = {
+  indexed_files: number;
+  by_type: Record<string, number>;
+  by_language: Record<string, number>;
+  latest_run: RepoIndexRun | null;
+  priority_files: RepoFileIndex[];
 };
 
 export type MergeRequestSnapshot = {
@@ -370,6 +416,7 @@ export type ChatResponse = {
   user_message: ChatMessage;
   assistant_message: ChatMessage;
   prepared_actions: AgentAction[];
+  prepared_fix_plans: FixPlan[];
 };
 
 export type FixPlan = {
@@ -389,6 +436,22 @@ export type FixPlan = {
   merge_request_url: string;
   plan_payload: {
     files?: Array<{ path: string; commit_action: string; purpose: string; content: string }>;
+    diff_preview?: Array<{ path: string; commit_action: string; diff: string }>;
+    evidence_bundle?: Array<{ type: string; id?: number | string; label: string; summary: string; file_path?: string }>;
+    validation?: {
+      branch_safe?: boolean;
+      default_branch_write?: boolean;
+      unsafe_paths?: string[];
+      destructive_changes?: boolean;
+      approval_required?: boolean;
+      merge_request_required?: boolean;
+      diff_preview_available?: boolean;
+      evidence_count?: number;
+      evidence_strong?: boolean;
+      test_commands_count?: number;
+    };
+    test_plan?: { commands?: string[]; executed?: boolean; execution_note?: string };
+    rollback?: string[];
     manual_patch_suggestions?: Array<{ path: string; reason: string; suggestion: string }>;
     review_checklist?: string[];
     safety?: Record<string, unknown>;
@@ -409,6 +472,9 @@ export type ProjectSummary = {
   latest_recommendations: Recommendation[];
   recent_actions: ActionDispatch[];
   memory_records: MemoryRecord[];
+  repo_files: RepoFileIndex[];
+  latest_repo_index_run: RepoIndexRun | null;
+  repo_context_summary: RepoContextSummary | null;
 };
 
 export class ApiError extends Error {
@@ -443,13 +509,14 @@ async function post<T>(path: string): Promise<T> {
   return response.json();
 }
 
-async function postJson<T>(path: string, body: Record<string, unknown> = {}): Promise<T> {
+async function postJson<T>(path: string, body: Record<string, unknown> = {}, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     cache: "no-store",
     credentials: "include",
     headers: { "Content-Type": "application/json", ...(await forwardedHeaders()) },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    ...init
   });
   if (!response.ok) {
     throw new ApiError(path, response.status);
@@ -486,16 +553,17 @@ export async function logout() {
 }
 
 export async function getDashboardData() {
-  const [summary, risks, pipelines, mergeRequests, incidents, memory] = await Promise.all([
+  const [summary, risks, pipelines, mergeRequests, incidents, memory, projects] = await Promise.all([
     get<DashboardSummary>("/api/dashboard/summary"),
     get<Risk[]>("/api/risks"),
     get<PipelineInsight[]>("/api/pipelines"),
     get<MergeRequestSignal[]>("/api/merge-requests"),
     get<Incident[]>("/api/incidents"),
-    get<MemoryRecord[]>("/api/memory")
+    get<MemoryRecord[]>("/api/memory"),
+    get<GitLabProject[]>("/api/projects")
   ]);
 
-  return { summary, risks, pipelines, mergeRequests, incidents, memory };
+  return { summary, risks, pipelines, mergeRequests, incidents, memory, projects };
 }
 
 export async function getObservabilityData() {
@@ -540,6 +608,10 @@ export async function getProjectSummary(projectId: string | number) {
   return get<ProjectSummary>(`/api/projects/${projectId}/summary`);
 }
 
+export async function refreshRepoIndex(projectId: string | number) {
+  return post<RepoIndexRun>(`/api/projects/${projectId}/repo-index/refresh`);
+}
+
 export async function getAgentActions() {
   return get<AgentAction[]>("/api/actions");
 }
@@ -572,12 +644,12 @@ export async function getAiIntegrationStatus() {
   return get<AiIntegrationStatus>("/api/integrations/ai");
 }
 
-export async function sendChatMessage(message: string, projectId?: number, threadId?: number) {
+export async function sendChatMessage(message: string, projectId?: number, threadId?: number, signal?: AbortSignal) {
   return postJson<ChatResponse>("/api/chat", {
     message,
     project_id: projectId || null,
     thread_id: threadId || null
-  });
+  }, { signal });
 }
 
 export async function getFixPlans() {

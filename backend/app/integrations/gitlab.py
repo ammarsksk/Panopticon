@@ -99,15 +99,18 @@ class GitLabClient:
         return result if isinstance(result, list) else []
 
     def list_projects(self, limit: int = 50) -> list[dict]:
-        params = {
-            "membership": "true",
+        base_params = {
             "simple": "true",
             "order_by": "last_activity_at",
             "sort": "desc",
             "per_page": min(limit, 100),
         }
-        result = self._request("GET", "/projects", params=params)
-        return result if isinstance(result, list) else []
+        membership = self._request("GET", "/projects", params={**base_params, "membership": "true"})
+        owned = self._request("GET", "/projects", params={**base_params, "owned": "true"})
+        return _dedupe_projects(
+            (membership if isinstance(membership, list) else [])
+            + (owned if isinstance(owned, list) else [])
+        )[:limit]
 
     def list_open_merge_requests(self, project_path: str, limit: int = 20) -> list[dict]:
         params = {
@@ -127,6 +130,23 @@ class GitLabClient:
         }
         result = self._request("GET", f"/projects/{self._project_id(project_path)}/pipelines", params=params)
         return result if isinstance(result, list) else []
+
+    def list_repository_tree(self, project_path: str, ref: str, *, recursive: bool = True, limit: int = 100) -> list[dict]:
+        params = {
+            "ref": ref,
+            "recursive": "true" if recursive else "false",
+            "per_page": min(limit, 100),
+        }
+        result = self._request("GET", f"/projects/{self._project_id(project_path)}/repository/tree", params=params)
+        return result if isinstance(result, list) else []
+
+    def get_repository_file(self, project_path: str, file_path: str, ref: str) -> dict:
+        result = self._request(
+            "GET",
+            f"/projects/{self._project_id(project_path)}/repository/files/{quote(file_path, safe='')}",
+            params={"ref": ref},
+        )
+        return result if isinstance(result, dict) else {}
 
     def create_merge_request_note(self, project_path: str, merge_request_iid: str, body: str) -> dict:
         if self.settings.dry_run_actions:
@@ -215,3 +235,15 @@ def enrich_payload_from_gitlab(payload: dict) -> dict:
         enriched["changed_files"] = changes
         return enriched
     return payload
+
+
+def _dedupe_projects(projects: list[dict]) -> list[dict]:
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for project in projects:
+        key = str(project.get("id") or project.get("path_with_namespace") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(project)
+    return unique

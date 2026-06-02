@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from app import models
 from app.services.agent_actions import AgentActionService
 from app.services.fix_plans import FixPlanService
+from app.services.grounded_recommendations import GroundedRecommendationEngine
 from app.services.metrics import MetricsService
 from app.services.observability import ObservabilityService
+from app.services.repo_context import RepoContextService
 
 
 class AgentToolService:
@@ -55,6 +57,16 @@ class AgentToolService:
                 "get_priority_context",
                 "Fetch cross-project risks, failures, incidents, and pending approvals for prioritization questions.",
                 {"limit": "integer"},
+            ),
+            _tool(
+                "search_repo_context",
+                "Search indexed repository files and redacted excerpts for a project or workspace.",
+                {"project_id": "integer", "project_path": "string", "query": "string", "limit": "integer"},
+            ),
+            _tool(
+                "generate_grounded_recommendation",
+                "Generate an evidence-backed recommendation from risks, pipelines, repository files, incidents, and memory.",
+                {"project_id": "integer", "project_path": "string", "question": "string", "intent": "string", "persist": "string"},
             ),
             _tool(
                 "prepare_actions",
@@ -141,6 +153,26 @@ class AgentToolService:
             return _serialize_context(self.chat_context(project, limit=limit))
         if name == "get_priority_context":
             return self.priority_context(limit=limit)
+        if name == "search_repo_context":
+            return self.repo_context(project=project, query=str(args.get("query") or ""), limit=limit)
+        if name == "generate_grounded_recommendation":
+            engine = GroundedRecommendationEngine(self.db, workspace_id=self.workspace_id)
+            if str(args.get("persist") or "").lower() in {"1", "true", "yes"}:
+                if not project:
+                    raise LookupError("Project is required to persist a grounded recommendation")
+                recommendation = engine.create_recommendation(
+                    project=project,
+                    question=str(args.get("question") or ""),
+                    intent=str(args.get("intent") or "summary"),
+                )
+                return {"recommendation": _record("recommendations", recommendation)}
+            return {
+                "grounded_recommendation": engine.recommend(
+                    project=project,
+                    question=str(args.get("question") or ""),
+                    intent=str(args.get("intent") or "summary"),
+                )
+            }
         if name == "prepare_actions":
             return self.prepare_actions(project=project, limit=limit)
         if name == "create_fix_plan":
@@ -195,6 +227,7 @@ class AgentToolService:
             "observability_events": self._records(models.ObservabilityEvent, project_path, desc(models.ObservabilityEvent.observed_at), limit),
             "incident_correlations": self._records(models.IncidentCorrelation, project_path, desc(models.IncidentCorrelation.updated_at), limit),
             "metric_snapshots": self._records(models.EngineeringMetricSnapshot, project_path, desc(models.EngineeringMetricSnapshot.snapshot_date), limit),
+            "repo_files": self._records(models.RepoFileIndex, project_path, desc(models.RepoFileIndex.indexed_at), limit),
             "memory": self._records(models.MemoryRecord, project_path, desc(models.MemoryRecord.created_at), limit),
         }
 
@@ -238,7 +271,15 @@ class AgentToolService:
             "observability_events": [_record("observability_events", item) for item in self._records(models.ObservabilityEvent, project_path, desc(models.ObservabilityEvent.observed_at), limit)],
             "incident_correlations": [_record("incident_correlations", item) for item in self._records(models.IncidentCorrelation, project_path, desc(models.IncidentCorrelation.updated_at), limit)],
             "metric_snapshots": [_record("engineering_metric_snapshots", item) for item in self._records(models.EngineeringMetricSnapshot, project_path, desc(models.EngineeringMetricSnapshot.snapshot_date), limit)],
+            "repo_files": [_record("repo_files", item) for item in self._records(models.RepoFileIndex, project_path, desc(models.RepoFileIndex.indexed_at), limit)],
             "memory": [_record("memory", item) for item in self._records(models.MemoryRecord, project_path, desc(models.MemoryRecord.created_at), limit)],
+        }
+
+    def repo_context(self, *, project: models.GitLabProject | None, query: str = "", limit: int = 10) -> dict[str, Any]:
+        service = RepoContextService(self.db, workspace_id=self.workspace_id)
+        return {
+            "project": _project(project) if project else None,
+            "files": [_record("repo_files", item) for item in service.search(project, query=query, limit=limit)],
         }
 
     def pipeline_context(self, *, project: models.GitLabProject | None, limit: int = 10) -> dict[str, Any]:
@@ -443,6 +484,14 @@ def _record(kind: str, record: Any) -> dict[str, Any]:
         "scope_type",
         "snapshot_date",
         "health_score",
+        "file_path",
+        "ref",
+        "file_type",
+        "language",
+        "size_bytes",
+        "content_sha",
+        "last_commit_id",
+        "content_excerpt",
     ]:
         if hasattr(record, field):
             data[field] = getattr(record, field)
@@ -461,6 +510,7 @@ def _record(kind: str, record: Any) -> dict[str, Any]:
         "related_risk_ids",
         "related_incident_ids",
         "metrics",
+        "signals",
     ]:
         if hasattr(record, json_field):
             data[json_field] = getattr(record, json_field)

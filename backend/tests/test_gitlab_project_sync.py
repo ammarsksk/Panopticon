@@ -1,3 +1,5 @@
+import base64
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -5,8 +7,10 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import ActionDispatch, GitLabProject, IncidentRecord, JobSnapshot, MemoryRecord, MergeRequestSnapshot, PipelineSnapshot, Recommendation, RiskAssessment
+from app.models import ActionDispatch, GitLabProject, IncidentRecord, JobSnapshot, MemoryRecord, MergeRequestSnapshot, PipelineInsight, PipelineSnapshot, Recommendation, RepoFileIndex, RiskAssessment, User, Workspace
+from app.services.auth import RequestContext, get_current_context
 from app.services.gitlab_sync import GitLabProjectSyncService
+from app.integrations.gitlab import _dedupe_projects
 
 
 class FakeGitLabClient:
@@ -74,6 +78,29 @@ class FakeGitLabClient:
             }
         ]
 
+    def list_repository_tree(self, project_path, ref, recursive=True, limit=100):
+        assert project_path == "demo/checkout-service"
+        assert ref == "main"
+        return [
+            {"type": "blob", "path": ".gitlab-ci.yml", "size": 60},
+            {"type": "blob", "path": "services/checkout/auth.py", "size": 80},
+            {"type": "blob", "path": "logo.png", "size": 2000},
+        ]
+
+    def get_repository_file(self, project_path, file_path, ref):
+        content = {
+            ".gitlab-ci.yml": "test:\n  script: pytest\n",
+            "services/checkout/auth.py": "API_TOKEN = 'secret'\ndef login():\n    return True\n",
+        }[file_path]
+        return {
+            "file_path": file_path,
+            "encoding": "base64",
+            "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+            "size": len(content.encode("utf-8")),
+            "content_sha256": f"sha-{file_path}",
+            "last_commit_id": "commit-1",
+        }
+
 
 def _session():
     engine = create_engine(
@@ -99,18 +126,36 @@ def test_gitlab_project_sync_persists_projects_mrs_pipelines_and_failed_jobs():
     assert db.query(MergeRequestSnapshot).count() == 1
     assert db.query(PipelineSnapshot).count() == 1
     assert db.query(JobSnapshot).count() == 1
+    assert db.query(PipelineInsight).count() == 1
+    assert db.query(Recommendation).count() >= 1
+    assert db.query(RiskAssessment).count() == 1
+    assert db.query(RepoFileIndex).count() == 2
 
     project = db.query(GitLabProject).one()
     assert project.project_path == "demo/checkout-service"
     assert project.open_merge_requests_count == 1
     assert project.failed_pipelines_count == 1
     assert project.latest_pipeline_status == "failed"
+    assert "REDACTED" in db.query(RepoFileIndex).filter(RepoFileIndex.file_path == "services/checkout/auth.py").one().content_excerpt
+
+
+def test_project_listing_dedupes_membership_and_owned_projects():
+    projects = _dedupe_projects(
+        [
+            {"id": 101, "path_with_namespace": "demo/app"},
+            {"id": 101, "path_with_namespace": "demo/app"},
+            {"id": 202, "path_with_namespace": "demo/api"},
+        ]
+    )
+
+    assert [project["path_with_namespace"] for project in projects] == ["demo/app", "demo/api"]
 
 
 def test_projects_api_returns_synced_project_summary():
     db = _session()
-    GitLabProjectSyncService(db, client=FakeGitLabClient()).sync()
+    GitLabProjectSyncService(db, client=FakeGitLabClient(), workspace_id=1).sync()
     risk = RiskAssessment(
+        workspace_id=1,
         project_path="demo/checkout-service",
         merge_request_iid="7",
         deployment_ref="",
@@ -121,6 +166,7 @@ def test_projects_api_returns_synced_project_summary():
         recommendations=["Require owner review."],
     )
     incident = IncidentRecord(
+        workspace_id=1,
         project_path="demo/checkout-service",
         title="Checkout rollback",
         severity="critical",
@@ -129,6 +175,7 @@ def test_projects_api_returns_synced_project_summary():
         recommendations=["Compare deployment config."],
     )
     recommendation = Recommendation(
+        workspace_id=1,
         project_path="demo/checkout-service",
         source_type="risk",
         source_id="1",
@@ -137,6 +184,7 @@ def test_projects_api_returns_synced_project_summary():
         status="dry_run",
     )
     memory = MemoryRecord(
+        workspace_id=1,
         project_path="demo/checkout-service",
         memory_type="incident",
         signature="checkout-auth-rollback",
@@ -148,6 +196,7 @@ def test_projects_api_returns_synced_project_summary():
     db.flush()
     db.add(
         ActionDispatch(
+            workspace_id=1,
             recommendation_id=recommendation.id,
             channel="gitlab_comment",
             status="dry_run",
@@ -161,7 +210,15 @@ def test_projects_api_returns_synced_project_summary():
     def override_db():
         yield db
 
+    def override_context():
+        return RequestContext(
+            user=User(id=1, email="test@example.com", name="Test User"),
+            workspace=Workspace(id=1, name="Test Workspace", slug="test"),
+            role="owner",
+        )
+
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_context] = override_context
     try:
         client = TestClient(app)
         projects = client.get("/api/projects").json()
@@ -175,8 +232,10 @@ def test_projects_api_returns_synced_project_summary():
     assert summary["open_merge_requests"][0]["merge_request_iid"] == "7"
     assert summary["latest_pipelines"][0]["status"] == "failed"
     assert summary["failed_jobs"][0]["name"] == "test"
-    assert summary["active_risks"][0]["score"] == 85
+    assert any(item["score"] == 85 for item in summary["active_risks"])
     assert summary["recent_incidents"][0]["title"] == "Checkout rollback"
     assert summary["latest_recommendations"][0]["title"] == "Deployment risk detected"
     assert summary["recent_actions"][0]["status"] == "dry_run"
     assert summary["memory_records"][0]["signature"] == "checkout-auth-rollback"
+    assert summary["repo_context_summary"]["indexed_files"] == 2
+    assert summary["repo_files"][0]["file_path"] == ".gitlab-ci.yml"

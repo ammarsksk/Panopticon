@@ -30,6 +30,8 @@ SCOPED_MODELS = (
     models.WebhookReceipt,
     models.GitLabProject,
     models.ProjectSyncRun,
+    models.RepoIndexRun,
+    models.RepoFileIndex,
     models.MergeRequestSnapshot,
     models.PipelineSnapshot,
     models.JobSnapshot,
@@ -161,6 +163,31 @@ class AuthService:
         self.db.commit()
         return RequestContext(user=user, workspace=workspace, role=membership.role, session=None)
 
+    def agent_runtime_context(self) -> RequestContext:
+        slug = self.settings.agent_runtime_workspace_slug or self.settings.default_workspace_slug
+        email = _normalize_email(self.settings.agent_runtime_user_email or "agent@panopticon.dev")
+        user = self.db.scalar(select(models.User).where(models.User.email == email))
+        if not user:
+            user = models.User(email=email, name="Panopticon Agent Runtime", password_hash="")
+            self.db.add(user)
+            self.db.flush()
+        workspace = self.db.scalar(select(models.Workspace).where(models.Workspace.slug == slug))
+        if not workspace:
+            workspace = models.Workspace(name="Agent Runtime Workspace", slug=slug)
+            self.db.add(workspace)
+            self.db.flush()
+        membership = self.db.scalar(
+            select(models.WorkspaceMember)
+            .where(models.WorkspaceMember.user_id == user.id)
+            .where(models.WorkspaceMember.workspace_id == workspace.id)
+        )
+        if not membership:
+            membership = models.WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="admin")
+            self.db.add(membership)
+            self.db.flush()
+        self.db.commit()
+        return RequestContext(user=user, workspace=workspace, role=membership.role, session=None)
+
     def audit(self, *, workspace_id: int | None, user_id: int | None, event_type: str, target_type: str = "", target_id: str = "", metadata: dict | None = None) -> models.AuditLog:
         entry = models.AuditLog(
             workspace_id=workspace_id,
@@ -178,8 +205,13 @@ class AuthService:
 def get_current_context(request: Request, db: Session = Depends(get_db)) -> RequestContext:
     settings = get_settings()
     service = AuthService(db)
-    token = request.cookies.get(settings.session_cookie_name) or _bearer_token(request)
-    context = service.context_from_token(token) if token else None
+    bearer_token = _bearer_token(request)
+    cookie_token = request.cookies.get(settings.session_cookie_name)
+    if _is_agent_runtime_token(settings.agent_runtime_token, bearer_token):
+        context = service.agent_runtime_context()
+    else:
+        token = cookie_token or bearer_token
+        context = service.context_from_token(token) if token else None
     if context is None:
         if settings.auth_required:
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -289,3 +321,7 @@ def _bearer_token(request: Request) -> str:
     if value.lower().startswith("bearer "):
         return value.split(" ", 1)[1].strip()
     return ""
+
+
+def _is_agent_runtime_token(expected: str, actual: str) -> bool:
+    return bool(expected and actual and hmac.compare_digest(expected, actual))

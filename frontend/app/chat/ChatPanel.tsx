@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send } from "lucide-react";
+import { Bot, Send, Square } from "lucide-react";
 import { AiIntegrationStatus, ChatMessage, ChatThread, GitLabProject, getChatMessages, sendChatMessage } from "@/lib/api";
 
 function Badge({ label }: { label: string }) {
@@ -13,11 +13,13 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
   const [threadId, setThreadId] = useState<number | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [preparedActions, setPreparedActions] = useState<number[]>([]);
+  const [preparedFixPlans, setPreparedFixPlans] = useState<number[]>([]);
   const [typingContent, setTypingContent] = useState<Record<number, string>>({});
   const [input, setInput] = useState("Which risks or failures should I look at first?");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const typingTimer = useRef<number | null>(null);
+  const abortController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!threadId) return;
@@ -29,6 +31,7 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
   useEffect(() => {
     return () => {
       if (typingTimer.current) window.clearInterval(typingTimer.current);
+      abortController.current?.abort();
     };
   }, []);
 
@@ -61,19 +64,60 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
   async function submit() {
     const text = input.trim();
     if (!text || busy) return;
+    const pendingUserMessage: ChatMessage = {
+      id: -Date.now(),
+      thread_id: threadId ?? 0,
+      role: "user",
+      content: text,
+      citations: [],
+      prepared_action_ids: [],
+      created_at: new Date().toISOString()
+    };
+    const pendingAssistantMessage: ChatMessage = {
+      id: pendingUserMessage.id - 1,
+      thread_id: threadId ?? 0,
+      role: "assistant",
+      content: "",
+      citations: [],
+      prepared_action_ids: [],
+      created_at: new Date().toISOString()
+    };
+
+    abortController.current?.abort();
+    abortController.current = new AbortController();
     setBusy(true);
     setError("");
+    setInput("");
+    setMessages((current) => [...current, pendingUserMessage, pendingAssistantMessage]);
     try {
-      const response = await sendChatMessage(text, projectId || undefined, threadId);
+      const response = await sendChatMessage(text, projectId || undefined, threadId, abortController.current.signal);
       setThreadId(response.thread.id);
-      setMessages((current) => [...current, response.user_message, response.assistant_message]);
+      setMessages((current) => [...current.filter((message) => message.id !== pendingUserMessage.id && message.id !== pendingAssistantMessage.id), response.user_message, response.assistant_message]);
       setPreparedActions(response.prepared_actions.map((action) => action.id));
-      setInput("");
+      setPreparedFixPlans(response.prepared_fix_plans.map((plan) => plan.id));
       startAssistantTyping(response.assistant_message);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Chat request failed.");
+      setMessages((current) => current.filter((message) => message.id !== pendingAssistantMessage.id));
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request stopped.");
+      } else {
+        setError(err instanceof Error ? err.message : "Chat request failed.");
+      }
       setBusy(false);
+    } finally {
+      abortController.current = null;
     }
+  }
+
+  function stopResponse() {
+    abortController.current?.abort();
+    if (typingTimer.current) {
+      window.clearInterval(typingTimer.current);
+      typingTimer.current = null;
+    }
+    setTypingContent({});
+    setMessages((current) => current.filter((message) => message.content || message.role !== "assistant"));
+    setBusy(false);
   }
 
   return (
@@ -88,6 +132,7 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
                 setThreadId(undefined);
                 setMessages([]);
                 setPreparedActions([]);
+                setPreparedFixPlans([]);
                 setTypingContent({});
               }}
               className="text-xs font-semibold uppercase text-teal-700"
@@ -101,6 +146,7 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
               setProjectId(Number(event.target.value));
               setThreadId(undefined);
               setMessages([]);
+              setPreparedFixPlans([]);
               setTypingContent({});
             }}
             className="mt-2 w-full border border-slate-300 bg-white p-2 text-sm"
@@ -148,6 +194,7 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
                     setThreadId(thread.id);
                     setProjectId(thread.project_id ?? 0);
                     setPreparedActions([]);
+                    setPreparedFixPlans([]);
                     setTypingContent({});
                   }}
                   className="block w-full border border-slate-200 p-2 text-left text-sm text-slate-700"
@@ -179,7 +226,15 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
                   <Badge label={message.role} />
                   <span className="text-xs text-slate-500">{new Date(message.created_at).toLocaleString()}</span>
                 </div>
-                <p className="whitespace-pre-line text-sm leading-6 text-slate-800">{typingContent[message.id] ?? message.content}</p>
+                {message.role === "assistant" && !message.content && busy ? (
+                  <div className="flex items-center gap-1 py-2" aria-label="Panopticon is thinking">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-teal-700 [animation-delay:-0.24s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-teal-700 [animation-delay:-0.12s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-teal-700" />
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-line text-sm leading-6 text-slate-800">{typingContent[message.id] ?? message.content}</p>
+                )}
               </article>
             ))
           ) : (
@@ -191,6 +246,11 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
           {preparedActions.length ? (
             <div className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               Prepared action IDs: {preparedActions.join(", ")}. Review them on the Actions page before execution.
+            </div>
+          ) : null}
+          {preparedFixPlans.length ? (
+            <div className="border border-teal-200 bg-teal-50 p-4 text-sm text-teal-800">
+              Prepared safe fix plan IDs: {preparedFixPlans.join(", ")}. Review diffs on the Fix Plans page before approving branch or MR creation.
             </div>
           ) : null}
           {error ? <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
@@ -206,12 +266,13 @@ export function ChatPanel({ projects, threads, aiStatus }: { projects: GitLabPro
             />
             <button
               type="button"
-              onClick={submit}
-              disabled={busy}
-              className="inline-flex items-center gap-2 border border-teal-700 bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
+              onClick={busy ? stopResponse : submit}
+              className={`inline-flex min-w-28 items-center justify-center gap-2 border px-4 py-2 text-sm font-semibold text-white ${
+                busy ? "border-red-700 bg-red-700 hover:bg-red-800" : "border-teal-700 bg-teal-700 hover:bg-teal-800"
+              }`}
             >
-              <Send size={16} />
-              {busy ? "Sending" : "Send"}
+              {busy ? <Square size={16} fill="currentColor" /> : <Send size={16} />}
+              {busy ? "Stop" : "Send"}
             </button>
           </div>
         </div>

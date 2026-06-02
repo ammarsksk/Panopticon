@@ -60,6 +60,35 @@ class GeminiReasoner:
             )
         return generated
 
+    def grounded_recommendation(
+        self,
+        *,
+        issue_type: str,
+        project_path: str,
+        question: str,
+        evidence: list[dict],
+        deterministic_draft: str,
+    ) -> str:
+        if not self.settings.gemini_enabled:
+            return deterministic_draft
+
+        prompt = self._grounded_recommendation_prompt()
+        generated = self._generate_live(
+            task="grounded_recommendation",
+            prompt=prompt,
+            context={
+                "issue_type": issue_type,
+                "project_path": project_path,
+                "question": question,
+                "evidence": evidence,
+                "deterministic_draft": deterministic_draft,
+            },
+            max_output_tokens=1600,
+        )
+        if _is_live_failure(generated) or _looks_incomplete(generated):
+            return deterministic_draft
+        return generated
+
     def load_prompt(self, task: str) -> str:
         filename = PROMPT_FILES.get(task)
         if not filename:
@@ -151,6 +180,18 @@ class GeminiReasoner:
                 "Be specific, concise, and operational. Prefer concrete next steps over generic advice.",
                 "When an action is proposed, remind the user it still needs approval before execution.",
                 "Return plain text only. Do not use Markdown tables.",
+            ]
+        )
+
+    def _grounded_recommendation_prompt(self) -> str:
+        return "\n".join(
+            [
+                "You are Panopticon's grounded recommendation engine.",
+                "Use only the supplied evidence bundle.",
+                "Name concrete files, jobs, pipelines, MRs, and commits only when they appear in evidence.",
+                "If the evidence is weak, explicitly say the root cause cannot be determined yet.",
+                "Return one short paragraph followed by one concrete next step sentence.",
+                "Do not use Markdown tables.",
             ]
         )
 

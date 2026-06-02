@@ -272,7 +272,8 @@ def test_chat_invokes_gemini_reasoner_with_focused_evidence(monkeypatch):
     assert captured["intent"] == "pipeline_failure"
     assert captured["subject"] == "demo/checkout-service"
     assert "Pipeline analysis" in captured["deterministic_draft"]
-    assert {item["type"] for item in captured["evidence"]} <= {"pipeline_insights", "failed_jobs", "pipelines"}
+    assert {item["type"] for item in captured["evidence"]} <= {"pipeline_insights", "failed_jobs", "pipelines", "grounded_recommendation"}
+    assert any(item["type"] == "grounded_recommendation" for item in captured["evidence"])
 
 
 def test_chat_does_not_show_deterministic_answer_when_live_gemini_fails(monkeypatch):

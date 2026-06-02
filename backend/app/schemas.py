@@ -111,6 +111,48 @@ class ProjectSyncRunOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RepoIndexRunOut(BaseModel):
+    id: int
+    project_id: int | None
+    project_path: str
+    ref: str
+    status: str
+    files_seen: int
+    files_indexed: int
+    files_skipped: int
+    error: str
+    started_at: datetime
+    finished_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RepoFileIndexOut(BaseModel):
+    id: int
+    project_id: int | None
+    project_path: str
+    file_path: str
+    ref: str
+    file_type: str
+    language: str
+    size_bytes: int
+    content_sha: str
+    last_commit_id: str
+    content_excerpt: str
+    signals: dict[str, Any]
+    indexed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RepoContextSummaryOut(BaseModel):
+    indexed_files: int
+    by_type: dict[str, int]
+    by_language: dict[str, int]
+    latest_run: RepoIndexRunOut | None
+    priority_files: list[RepoFileIndexOut]
+
+
 class MergeRequestSnapshotOut(BaseModel):
     id: int
     gitlab_project_id: str
@@ -353,6 +395,28 @@ class RecommendationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GroundedRecommendationCreateIn(BaseModel):
+    question: str = ""
+    intent: str = "summary"
+    persist: bool = False
+    channel: str = "dashboard"
+
+
+class GroundedRecommendationOut(BaseModel):
+    project_path: str
+    issue_type: str
+    severity: str
+    confidence: float
+    grounded: bool
+    validation_errors: list[str]
+    summary: str
+    recommendation: str
+    evidence: list[dict[str, Any]]
+    next_actions: list[str]
+    proposed_action: dict[str, Any]
+    saved_recommendation: RecommendationOut | None = None
+
+
 class ActionDispatchOut(BaseModel):
     id: int
     recommendation_id: int | None
@@ -497,6 +561,7 @@ class ChatResponseOut(BaseModel):
     user_message: ChatMessageOut
     assistant_message: ChatMessageOut
     prepared_actions: list[AgentActionOut]
+    prepared_fix_plans: list[FixPlanOut] = Field(default_factory=list)
 
 
 class MemoryRecordOut(BaseModel):
@@ -522,6 +587,9 @@ class ProjectSummaryOut(BaseModel):
     latest_recommendations: list[RecommendationOut]
     recent_actions: list[ActionDispatchOut]
     memory_records: list[MemoryRecordOut]
+    repo_files: list[RepoFileIndexOut] = Field(default_factory=list)
+    latest_repo_index_run: RepoIndexRunOut | None = None
+    repo_context_summary: RepoContextSummaryOut | None = None
 
 
 class DashboardSummary(BaseModel):
@@ -529,5 +597,8 @@ class DashboardSummary(BaseModel):
     failed_pipelines: int
     blocked_merge_requests: int
     open_incidents: int
+    synced_projects: int = 0
+    latest_project_sync: ProjectSyncRunOut | None = None
     latest_recommendations: list[RecommendationOut]
     slack_status: dict[str, Any]
+    gitlab_status: OAuthIntegrationStatusOut

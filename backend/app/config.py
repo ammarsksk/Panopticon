@@ -41,6 +41,9 @@ class Settings:
     session_cookie_name: str = "panopticon_session"
     session_ttl_hours: int = 168
     default_workspace_slug: str = "local-dev"
+    agent_runtime_token: str = ""
+    agent_runtime_workspace_slug: str = "local-dev"
+    agent_runtime_user_email: str = "agent@panopticon.dev"
     gitlab_webhook_secret: str = ""
     gitlab_base_url: str = "https://gitlab.com"
     gitlab_token: str = ""
@@ -50,6 +53,7 @@ class Settings:
     gitlab_oauth_client_id: str = ""
     gitlab_oauth_client_secret: str = ""
     gitlab_oauth_redirect_uri: str = ""
+    gitlab_oauth_scopes: list[str] | None = None
     oauth_token_encryption_key: str = ""
     oauth_state_ttl_minutes: int = 15
     slack_webhook_url: str = ""
@@ -61,6 +65,9 @@ class Settings:
     slack_oauth_redirect_uri: str = ""
     dry_run_actions: bool = True
     dispatch_actions: bool = True
+    repo_index_on_sync: bool = True
+    repo_index_file_limit: int = 80
+    repo_index_max_file_bytes: int = 20000
     gemini_enabled: bool = False
     gemini_model: str = "gemini-2.5-pro"
     gemini_api_key: str = ""
@@ -71,6 +78,8 @@ class Settings:
     def __post_init__(self) -> None:
         if self.allowed_origins is None:
             object.__setattr__(self, "allowed_origins", ["http://localhost:3000", "http://127.0.0.1:3000"])
+        if self.gitlab_oauth_scopes is None:
+            object.__setattr__(self, "gitlab_oauth_scopes", ["api", "read_user"])
 
     @property
     def is_production(self) -> bool:
@@ -113,6 +122,8 @@ class Settings:
             missing.append("ALLOWED_ORIGINS must be explicit in production")
         if not self.auth_required:
             missing.append("AUTH_REQUIRED=true")
+        if not self.agent_runtime_token:
+            missing.append("AGENT_RUNTIME_TOKEN")
         if missing:
             raise RuntimeError("Production configuration is incomplete: " + ", ".join(missing))
 
@@ -134,6 +145,9 @@ def get_settings() -> Settings:
         session_cookie_name=os.getenv("SESSION_COOKIE_NAME", "panopticon_session"),
         session_ttl_hours=_int_env("SESSION_TTL_HOURS", 168),
         default_workspace_slug=os.getenv("DEFAULT_WORKSPACE_SLUG", "local-dev"),
+        agent_runtime_token=os.getenv("AGENT_RUNTIME_TOKEN", ""),
+        agent_runtime_workspace_slug=os.getenv("AGENT_RUNTIME_WORKSPACE_SLUG", os.getenv("DEFAULT_WORKSPACE_SLUG", "local-dev")),
+        agent_runtime_user_email=os.getenv("AGENT_RUNTIME_USER_EMAIL", "agent@panopticon.dev"),
         gitlab_webhook_secret=os.getenv("GITLAB_WEBHOOK_SECRET", ""),
         gitlab_base_url=os.getenv("GITLAB_BASE_URL", "https://gitlab.com"),
         gitlab_token=os.getenv("GITLAB_TOKEN", ""),
@@ -143,6 +157,7 @@ def get_settings() -> Settings:
         gitlab_oauth_client_id=os.getenv("GITLAB_OAUTH_CLIENT_ID", ""),
         gitlab_oauth_client_secret=os.getenv("GITLAB_OAUTH_CLIENT_SECRET", ""),
         gitlab_oauth_redirect_uri=os.getenv("GITLAB_OAUTH_REDIRECT_URI", ""),
+        gitlab_oauth_scopes=_csv_env("GITLAB_OAUTH_SCOPES", ["api", "read_user"]),
         oauth_token_encryption_key=os.getenv("OAUTH_TOKEN_ENCRYPTION_KEY", ""),
         oauth_state_ttl_minutes=_int_env("OAUTH_STATE_TTL_MINUTES", 15),
         slack_webhook_url=os.getenv("SLACK_WEBHOOK_URL", ""),
@@ -154,6 +169,9 @@ def get_settings() -> Settings:
         slack_oauth_redirect_uri=os.getenv("SLACK_OAUTH_REDIRECT_URI", ""),
         dry_run_actions=_bool_env("DRY_RUN_ACTIONS", True),
         dispatch_actions=_bool_env("DISPATCH_ACTIONS", True),
+        repo_index_on_sync=_bool_env("REPO_INDEX_ON_SYNC", True),
+        repo_index_file_limit=_int_env("REPO_INDEX_FILE_LIMIT", 80),
+        repo_index_max_file_bytes=_int_env("REPO_INDEX_MAX_FILE_BYTES", 20000),
         gemini_enabled=_bool_env("GEMINI_ENABLED", False),
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-pro"),
         gemini_api_key=os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", ""),

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowLeft, ExternalLink, GitBranch, GitCommit, GitPullRequest, History, Send, ShieldAlert } from "lucide-react";
-import { getProjectSummary, JobSnapshot, PipelineSnapshot, Recommendation, Risk } from "@/lib/api";
+import { getProjectSummary, JobSnapshot, PipelineSnapshot, Recommendation, RepoFileIndex, Risk } from "@/lib/api";
 import { redirectIfUnauthorized } from "../../authRedirect";
+import { RepoIndexButton } from "./RepoIndexButton";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
   const styles = {
@@ -158,6 +159,33 @@ function RecommendationCard({ recommendation }: { recommendation: Recommendation
   );
 }
 
+function RepoFileCard({ file }: { file: RepoFileIndex }) {
+  const flags = file.signals.risk_flags ?? [];
+  return (
+    <article className="border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-medium text-slate-950">{file.file_path}</div>
+          <p className="mt-1 text-xs text-slate-500">
+            {file.language || "text"} - {Math.max(1, Math.round(file.size_bytes / 1024))} KB - {formatDate(file.indexed_at)}
+          </p>
+        </div>
+        <Badge label={file.file_type} tone={file.file_type === "deployment" || file.file_type === "ci" ? "warn" : "neutral"} />
+      </div>
+      {flags.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {flags.slice(0, 5).map((flag) => (
+            <Badge key={flag} label={flag.replaceAll("_", " ")} />
+          ))}
+        </div>
+      ) : null}
+      <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+        {file.content_excerpt || "No excerpt stored."}
+      </pre>
+    </article>
+  );
+}
+
 function DetailList({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="mt-3">
@@ -181,6 +209,13 @@ function formatDate(value: string | null | undefined) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function formatCounts(values: Record<string, number>) {
+  return Object.entries(values)
+    .sort((a, b) => b[1] - a[1])
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(", ");
 }
 
 export default async function ProjectWorkspacePage({ params }: { params: Promise<{ projectId: string }> }) {
@@ -231,8 +266,44 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
           <Metric label="Open MRs" value={summary.open_merge_requests.length} />
           <Metric label="Failed jobs" value={summary.failed_jobs.length} tone={summary.failed_jobs.length ? "critical" : "neutral"} />
           <Metric label="Active risks" value={summary.active_risks.length} tone={summary.active_risks.length ? "critical" : "neutral"} />
-          <Metric label="Actions" value={summary.recent_actions.length} tone={summary.recent_actions.length ? "warn" : "neutral"} />
+          <Metric label="Repo files" value={summary.repo_context_summary?.indexed_files ?? 0} tone={(summary.repo_context_summary?.indexed_files ?? 0) ? "neutral" : "warn"} />
         </div>
+
+        <Section title="Repository Context" icon={<GitBranch className="text-teal-700" size={20} />}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge label={summary.latest_repo_index_run?.status || "not indexed"} tone={statusTone(summary.latest_repo_index_run?.status || "")} />
+              <Badge label={`${summary.repo_context_summary?.indexed_files ?? 0} indexed files`} />
+              <Badge label={`ref ${summary.latest_repo_index_run?.ref || project.default_branch || "unknown"}`} />
+            </div>
+            <RepoIndexButton projectId={projectId} />
+          </div>
+          {summary.repo_context_summary?.indexed_files ? (
+            <>
+              <div className="mb-4 grid gap-3 md:grid-cols-3">
+                <div className="border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Context Types</div>
+                  <p className="mt-2 text-sm text-slate-700">{formatCounts(summary.repo_context_summary.by_type)}</p>
+                </div>
+                <div className="border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Languages</div>
+                  <p className="mt-2 text-sm text-slate-700">{formatCounts(summary.repo_context_summary.by_language) || "Text files"}</p>
+                </div>
+                <div className="border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Last Index</div>
+                  <p className="mt-2 text-sm text-slate-700">{formatDate(summary.latest_repo_index_run?.finished_at || summary.latest_repo_index_run?.started_at)}</p>
+                </div>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                {summary.repo_files.map((file) => (
+                  <RepoFileCard key={file.id} file={file} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <EmptyState label="No repository context has been indexed yet. Refresh repo context to let Panopticon read CI, deployment, dependency, and source files for agent reasoning." />
+          )}
+        </Section>
 
         <Section title="Open Merge Requests" icon={<GitPullRequest className="text-teal-700" size={20} />}>
           {summary.open_merge_requests.length ? (

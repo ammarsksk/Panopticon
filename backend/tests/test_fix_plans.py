@@ -6,7 +6,7 @@ from sqlalchemy.pool import StaticPool
 from app.config import get_settings
 from app.database import Base, get_db
 from app.main import app
-from app.models import FixPlan, FixPlanApproval, GitLabProject, PipelineInsight
+from app.models import ChatMessage, FixPlan, FixPlanApproval, GitLabProject, PipelineInsight, RepoFileIndex
 
 
 def _session():
@@ -41,6 +41,21 @@ def _seed(db):
         recommendations=["Add a bounded timeout and validate rollout health."],
     )
     db.add_all([project, pipeline])
+    db.flush()
+    repo_file = RepoFileIndex(
+        project_id=project.id,
+        project_path="demo/checkout-service",
+        file_path=".gitlab-ci.yml",
+        ref="main",
+        file_type="ci",
+        language="yaml",
+        size_bytes=120,
+        content_sha="sha-ci",
+        last_commit_id="abc123",
+        content_excerpt="deploy:\n  script: kubectl rollout status deployment/checkout\n",
+        signals={"risk_flags": ["deployment", "timeout"]},
+    )
+    db.add(repo_file)
     db.commit()
     return project, pipeline
 
@@ -83,6 +98,12 @@ def test_fix_plan_lifecycle_is_approval_gated_and_dry_run(monkeypatch):
     assert created.json()["branch_name"].startswith("panopticon/")
     assert created.json()["branch_name"] != "main"
     assert created.json()["plan_payload"]["files"]
+    assert created.json()["plan_payload"]["diff_preview"]
+    assert created.json()["plan_payload"]["validation"]["branch_safe"] is True
+    assert created.json()["plan_payload"]["validation"]["destructive_changes"] is False
+    assert created.json()["plan_payload"]["test_plan"]["commands"]
+    assert created.json()["plan_payload"]["rollback"]
+    assert any(file["path"] == ".gitlab-ci.yml" and file["commit_action"] == "update" for file in created.json()["plan_payload"]["files"])
     assert blocked.status_code == 403
     assert approved.status_code == 200
     assert approved.json()["status"] == "approved"
@@ -153,6 +174,7 @@ def test_fix_plan_rejects_unsafe_file_paths():
             "branch_name": "panopticon/safe-branch",
             "base_branch": "main",
             "files": [{"path": "../.env", "commit_action": "create", "content": "SECRET=1"}],
+            "diff_preview": [{"path": "../.env", "commit_action": "create", "diff": "+SECRET=1"}],
         },
         last_result={},
         error="",
@@ -173,3 +195,36 @@ def test_fix_plan_rejects_unsafe_file_paths():
 
     assert response.status_code == 409
     assert "Parent directory traversal" in response.json()["detail"]
+
+
+def test_chat_can_prepare_safe_fix_plan_with_diff_preview(monkeypatch):
+    monkeypatch.setattr(
+        "app.agents.gemini.GeminiReasoner.chat_answer",
+        lambda self, *, question, intent, subject, evidence, deterministic_draft: deterministic_draft,
+    )
+    db = _session()
+    project, _pipeline = _seed(db)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={"project_id": project.id, "message": "Prepare a safe fix plan for the pipeline timeout."},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["prepared_fix_plans"]
+    assert "Prepared safe fix plan" in payload["assistant_message"]["content"]
+    plan = payload["prepared_fix_plans"][0]
+    assert plan["plan_payload"]["diff_preview"]
+    assert plan["plan_payload"]["validation"]["approval_required"] is True
+    assert db.query(FixPlan).count() == 1
+    assert db.query(ChatMessage).count() == 2

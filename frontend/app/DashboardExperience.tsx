@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -26,12 +26,14 @@ import {
 import {
   API_BASE,
   DashboardSummary,
+  GitLabProject,
   Incident,
   MemoryRecord,
   MergeRequestSignal,
   PipelineInsight,
   Recommendation,
-  Risk
+  Risk,
+  syncGitLabProjects
 } from "@/lib/api";
 
 type DashboardData = {
@@ -41,6 +43,7 @@ type DashboardData = {
   mergeRequests: MergeRequestSignal[];
   incidents: Incident[];
   memory: MemoryRecord[];
+  projects: GitLabProject[];
 };
 
 type DashboardView = "overview" | "risk" | "pipeline" | "actions" | "incidents";
@@ -64,12 +67,14 @@ const views: Array<{ id: DashboardView; label: string; icon: typeof LayoutDashbo
 ];
 
 export function DashboardExperience({ data }: { data: DashboardData }) {
-  const { summary, risks, pipelines, mergeRequests, incidents, memory } = data;
+  const { summary, risks, pipelines, mergeRequests, incidents, memory, projects } = data;
   const [view, setView] = useState<DashboardView>("overview");
   const [query, setQuery] = useState("");
   const [selectedActionId, setSelectedActionId] = useState(summary.latest_recommendations[0]?.id ?? 0);
   const [expandedRiskId, setExpandedRiskId] = useState<number | null>(risks[0]?.id ?? null);
   const [notice, setNotice] = useState("");
+  const [syncState, setSyncState] = useState<"idle" | "syncing" | "completed" | "failed">("idle");
+  const [syncMessage, setSyncMessage] = useState("");
 
   const visibleRisks = useMemo(() => uniqueBy(risks, (risk) => `${risk.project_path}:${risk.merge_request_iid}:${risk.score}`), [risks]);
   const recommendations = summary.latest_recommendations ?? [];
@@ -103,13 +108,50 @@ export function DashboardExperience({ data }: { data: DashboardData }) {
     last_error: "",
     last_checked_at: null
   };
+  const gitlabStatus = summary.gitlab_status ?? {
+    provider: "gitlab",
+    configured: false,
+    connected: false,
+    account_label: "",
+    scopes: [],
+    expires_at: null,
+    base_url: "https://gitlab.com"
+  };
   const pressure = summary.active_risks + summary.failed_pipelines + summary.blocked_merge_requests + summary.open_incidents;
   const headline = pressure > 8 ? "High operational pressure" : pressure > 3 ? "Focused review needed" : "Operations look controlled";
   const firstStep = firstNextStep(filtered.recommendations, filtered.risks, filtered.pipelines);
 
+  useEffect(() => {
+    if (!gitlabStatus.connected || syncState !== "idle" || !shouldAutoSync(summary)) return;
+    const key = `panopticon-auto-sync:${gitlabStatus.account_label || "gitlab"}`;
+    const lastAttempt = Number(window.sessionStorage.getItem(key) || "0");
+    if (Date.now() - lastAttempt < 120_000) return;
+    window.sessionStorage.setItem(key, String(Date.now()));
+    runGitLabSync({ automatic: true });
+  }, [gitlabStatus.connected, gitlabStatus.account_label, syncState, summary]);
+
   function pulse(message: string) {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 1600);
+  }
+
+  async function runGitLabSync(options: { automatic?: boolean } = {}) {
+    setSyncState("syncing");
+    setSyncMessage(options.automatic ? "Auto-syncing GitLab projects and pipeline state..." : "");
+    try {
+      const result = await syncGitLabProjects();
+      if (result.status === "completed" || result.status === "completed_with_errors") {
+        setSyncState("completed");
+        setSyncMessage(`Synced ${result.projects_updated} project${result.projects_updated === 1 ? "" : "s"}. Updating dashboard...`);
+        window.setTimeout(() => window.location.reload(), 900);
+      } else {
+        setSyncState("failed");
+        setSyncMessage(result.error || "GitLab sync did not complete.");
+      }
+    } catch (error) {
+      setSyncState("failed");
+      setSyncMessage(error instanceof Error ? error.message : "GitLab sync failed.");
+    }
   }
 
   return (
@@ -152,6 +194,7 @@ export function DashboardExperience({ data }: { data: DashboardData }) {
             <div>
               <div className="flex flex-wrap gap-2">
                 <Badge label={slackStatus.mode === "dry_run" ? "Dry-run mode" : "Live actions"} tone={slackStatus.mode === "dry_run" ? "warn" : "good"} />
+                <Badge label={gitlabStatus.connected ? "GitLab connected" : "GitLab missing"} tone={gitlabStatus.connected ? "good" : "critical"} />
                 <Badge label={slackStatus.webhook_configured || slackStatus.oauth_connected ? "Slack connected" : "Slack missing"} tone={slackStatus.webhook_configured || slackStatus.oauth_connected ? "good" : "critical"} />
                 <Badge label={`${recommendations.filter((item) => item.requires_approval).length} approvals`} tone="warn" />
               </div>
@@ -181,7 +224,17 @@ export function DashboardExperience({ data }: { data: DashboardData }) {
           </div>
         </section>
 
-        <section className="mt-4 grid gap-3 md:grid-cols-4">
+        <ConnectionSetupPanel
+          summary={summary}
+          projects={projects}
+          gitlabStatus={gitlabStatus}
+          slackStatus={slackStatus}
+          syncState={syncState}
+          syncMessage={syncMessage}
+        />
+
+        <section className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <MetricCard icon={GitBranch} label="Synced projects" value={summary.synced_projects ?? projects.length} tone={(summary.synced_projects ?? projects.length) ? "good" : "warn"} hint="GitLab repositories loaded into this workspace" />
           <MetricCard icon={ShieldAlert} label="Active high risks" value={summary.active_risks} tone="critical" hint="Deployment or MR risk above threshold" />
           <MetricCard icon={Activity} label="Failed pipelines" value={summary.failed_pipelines} tone="warn" hint="Recent GitLab pipeline failures" />
           <MetricCard icon={GitPullRequest} label="Blocked MRs" value={summary.blocked_merge_requests} tone="warn" hint="Merge requests needing coordination" />
@@ -230,6 +283,7 @@ export function DashboardExperience({ data }: { data: DashboardData }) {
           <section className="space-y-4">
             {view === "overview" ? (
               <OverviewPanel
+                projects={projects}
                 risks={filtered.risks}
                 pipelines={filtered.pipelines}
                 mergeRequests={filtered.mergeRequests}
@@ -264,7 +318,7 @@ export function DashboardExperience({ data }: { data: DashboardData }) {
 
           <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
             <SelectedActionCard action={selectedAction} />
-            <IntegrationPanel slackStatus={slackStatus} />
+            <IntegrationPanel slackStatus={slackStatus} gitlabStatus={gitlabStatus} />
             <MemoryPanel memory={memory} />
           </aside>
         </div>
@@ -273,7 +327,149 @@ export function DashboardExperience({ data }: { data: DashboardData }) {
   );
 }
 
+function ConnectionSetupPanel({
+  summary,
+  projects,
+  gitlabStatus,
+  slackStatus,
+  syncState,
+  syncMessage
+}: {
+  summary: DashboardSummary;
+  projects: GitLabProject[];
+  gitlabStatus: DashboardSummary["gitlab_status"];
+  slackStatus: DashboardSummary["slack_status"];
+  syncState: "idle" | "syncing" | "completed" | "failed";
+  syncMessage: string;
+}) {
+  const gitlabReady = gitlabStatus.connected;
+  const slackReady = Boolean(slackStatus.oauth_connected || slackStatus.webhook_configured || slackStatus.bot_token_configured);
+  const fullyConnected = gitlabReady && slackReady;
+  const lastSync = summary.latest_project_sync;
+  const syncOk = lastSync?.status === "completed" || lastSync?.status === "completed_with_errors";
+  const projectCount = summary.synced_projects ?? 0;
+
+  if (fullyConnected) {
+    return (
+      <section className="mt-4 border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 font-semibold text-slate-950">
+              <CheckCircle2 size={17} className="text-teal-700" aria-hidden="true" />
+              Workspace connected
+            </div>
+            <Badge label={`GitLab: ${gitlabStatus.account_label || "connected"}`} tone="good" />
+            <Badge label={`Slack: ${slackStatus.oauth_channel || slackStatus.oauth_account_label || "connected"}`} tone="good" />
+            <Badge label={`${projectCount} synced project${projectCount === 1 ? "" : "s"}`} tone={projectCount ? "good" : "warn"} />
+            {lastSync ? <Badge label={`Last sync: ${lastSync.status}`} tone={syncOk ? "good" : "warn"} /> : <Badge label="Not synced yet" tone="warn" />}
+            {syncState === "syncing" ? <Badge label="Auto-syncing" tone="warn" /> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <SecondaryLink href="/projects" icon={GitBranch} label="View projects" />
+          </div>
+        </div>
+        {syncMessage ? <p className={`mt-3 text-sm ${syncState === "failed" ? "text-red-700" : "text-slate-600"}`}>{syncMessage}</p> : null}
+        {lastSync?.error ? <p className="mt-3 text-sm leading-6 text-amber-700">{lastSync.error}</p> : null}
+        {projects.length ? <ProjectStrip projects={projects} /> : null}
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-4 border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase text-slate-500">Workspace setup</div>
+          <h2 className="mt-1 text-lg font-semibold text-slate-950">Connect services before relying on recommendations</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+            Panopticon needs GitLab connected and synced for project, merge request, pipeline, and repository context. Slack is optional for viewing data, but required for alert delivery and approval workflows.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge label={gitlabReady ? "GitLab connected" : gitlabStatus.configured ? "GitLab ready" : "GitLab setup missing"} tone={gitlabReady ? "good" : "warn"} />
+          <Badge label={slackReady ? "Slack connected" : slackStatus.oauth_configured ? "Slack ready" : "Slack setup missing"} tone={slackReady ? "good" : "warn"} />
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 font-semibold text-slate-950">
+                <GitBranch size={17} className="text-teal-700" aria-hidden="true" />
+                GitLab
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {gitlabReady
+                  ? `Connected as ${gitlabStatus.account_label || "GitLab user"}. Sync now to load accessible projects and fresh pipeline state.`
+                  : gitlabStatus.configured
+                    ? "OAuth is configured. Connect your GitLab account, then run sync."
+                    : "OAuth is not configured yet. Add the GitLab client id and secret in the backend environment."}
+              </p>
+            </div>
+            <Badge label={gitlabReady ? "connected" : "not connected"} tone={gitlabReady ? "good" : "critical"} />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {!gitlabReady ? (
+              <a
+                href={`${API_BASE}/api/integrations/gitlab/connect`}
+                className="inline-flex items-center gap-2 border border-teal-700 bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-teal-800"
+              >
+                <GitBranch size={16} aria-hidden="true" />
+                Connect GitLab
+              </a>
+            ) : null}
+            {gitlabReady ? <Badge label={syncState === "syncing" ? "Auto-syncing" : "Auto-sync enabled"} tone="good" /> : null}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge label={`${summary.synced_projects ?? 0} synced project${(summary.synced_projects ?? 0) === 1 ? "" : "s"}`} tone={(summary.synced_projects ?? 0) ? "good" : "warn"} />
+            {summary.latest_project_sync ? <Badge label={`Last sync: ${summary.latest_project_sync.status}`} tone={summary.latest_project_sync.status === "failed" ? "critical" : "good"} /> : <Badge label="No sync yet" tone="warn" />}
+          </div>
+          {syncMessage ? <p className={`mt-3 text-sm ${syncState === "failed" ? "text-red-700" : "text-slate-600"}`}>{syncMessage}</p> : null}
+          {summary.latest_project_sync?.error ? <p className="mt-3 text-sm leading-6 text-amber-700">{summary.latest_project_sync.error}</p> : null}
+          {gitlabStatus.scopes?.length ? <p className="mt-3 text-xs text-slate-500">Scopes: {gitlabStatus.scopes.join(", ")}</p> : null}
+          {projects.length ? <ProjectStrip projects={projects} /> : null}
+        </div>
+
+        <div className="border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 font-semibold text-slate-950">
+                <Send size={17} className="text-teal-700" aria-hidden="true" />
+                Slack
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {slackReady
+                  ? `Connected${slackStatus.oauth_channel ? ` to ${slackStatus.oauth_channel}` : ""}. Alerts and approval prompts can be dispatched from actions.`
+                  : slackStatus.oauth_configured
+                    ? "OAuth is configured. Connect Slack to enable alert delivery and approval buttons."
+                    : "OAuth is not configured yet. Add Slack client id, secret, and signing secret in the backend environment."}
+              </p>
+            </div>
+            <Badge label={slackReady ? "connected" : "not connected"} tone={slackReady ? "good" : "critical"} />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {!slackReady ? (
+              <a
+                href={`${API_BASE}/api/integrations/slack/connect`}
+                className="inline-flex items-center gap-2 border border-teal-700 bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-teal-800"
+              >
+                <Send size={16} aria-hidden="true" />
+                Connect Slack
+              </a>
+            ) : (
+              <Badge label="Slack connected" tone="good" />
+            )}
+          </div>
+          {slackStatus.last_error ? <p className="mt-3 text-sm leading-6 text-red-700">{slackStatus.last_error}</p> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function OverviewPanel({
+  projects,
   risks,
   pipelines,
   mergeRequests,
@@ -281,6 +477,7 @@ function OverviewPanel({
   recommendations,
   onSelectAction
 }: {
+  projects: GitLabProject[];
   risks: Risk[];
   pipelines: PipelineInsight[];
   mergeRequests: MergeRequestSignal[];
@@ -290,6 +487,8 @@ function OverviewPanel({
 }) {
   return (
     <>
+      <SyncedProjectsPanel projects={projects} />
+
       <Panel title="Priority Lane" icon={Zap} count={recommendations.length + risks.length + pipelines.length}>
         <div className="space-y-2">
           {recommendations.slice(0, 4).map((item) => (
@@ -475,6 +674,59 @@ function IncidentPanel({ incidents, memory }: { incidents: Incident[]; memory: M
   );
 }
 
+function SyncedProjectsPanel({ projects }: { projects: GitLabProject[] }) {
+  return (
+    <Panel title="Synced Projects" icon={GitBranch} count={projects.length}>
+      {projects.length ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {projects.slice(0, 4).map((project) => (
+            <Link
+              key={project.id}
+              href={`/projects/${project.id}`}
+              className="group border border-slate-200 bg-white p-4 transition duration-150 hover:-translate-y-0.5 hover:border-teal-500 hover:shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-slate-950">{project.project_path}</div>
+                  <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">{project.description || project.namespace || "Synced GitLab repository"}</p>
+                </div>
+                <ArrowRight size={16} className="shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-teal-700" aria-hidden="true" />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge label={project.latest_pipeline_status || "no pipeline"} tone={project.latest_pipeline_status === "failed" ? "critical" : project.latest_pipeline_status === "success" ? "good" : "neutral"} />
+                <Badge label={`${project.open_merge_requests_count} open MR${project.open_merge_requests_count === 1 ? "" : "s"}`} tone={project.open_merge_requests_count ? "warn" : "neutral"} />
+                <Badge label={`${project.failed_pipelines_count} failed`} tone={project.failed_pipelines_count ? "critical" : "good"} />
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <EmptyState label="GitLab is connected, but no projects have been synced into this workspace yet. Panopticon will auto-sync when the dashboard opens." />
+      )}
+      {projects.length > 4 ? (
+        <Link href="/projects" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-teal-700">
+          View all {projects.length} projects
+          <ArrowRight size={15} aria-hidden="true" />
+        </Link>
+      ) : null}
+    </Panel>
+  );
+}
+
+function ProjectStrip({ projects }: { projects: GitLabProject[] }) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {projects.slice(0, 3).map((project) => (
+        <Link key={project.id} href={`/projects/${project.id}`} className="inline-flex items-center gap-2 border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 hover:border-teal-500 hover:text-teal-700">
+          <GitBranch size={13} aria-hidden="true" />
+          {project.project_path}
+        </Link>
+      ))}
+      {projects.length > 3 ? <Badge label={`+${projects.length - 3} more`} /> : null}
+    </div>
+  );
+}
+
 function SelectedActionCard({ action }: { action?: Recommendation }) {
   if (!action) {
     return (
@@ -527,8 +779,9 @@ function SelectedActionCard({ action }: { action?: Recommendation }) {
   );
 }
 
-function IntegrationPanel({ slackStatus }: { slackStatus: DashboardSummary["slack_status"] }) {
+function IntegrationPanel({ slackStatus, gitlabStatus }: { slackStatus: DashboardSummary["slack_status"]; gitlabStatus: DashboardSummary["gitlab_status"] }) {
   const items = [
+    { label: "GitLab OAuth", ok: Boolean(gitlabStatus.connected), value: gitlabStatus.connected ? gitlabStatus.account_label || "Connected" : gitlabStatus.configured ? "Ready" : "Missing" },
     { label: "Slack OAuth", ok: Boolean(slackStatus.oauth_connected), value: slackStatus.oauth_connected ? slackStatus.oauth_account_label || "Connected" : slackStatus.oauth_configured ? "Ready" : "Missing" },
     { label: "Webhook", ok: slackStatus.webhook_configured, value: slackStatus.webhook_configured ? "Configured" : "Missing" },
     { label: "Slack app", ok: slackStatus.signing_secret_configured, value: slackStatus.signing_secret_configured ? "Verified" : "Missing secret" },
@@ -549,13 +802,15 @@ function IntegrationPanel({ slackStatus }: { slackStatus: DashboardSummary["slac
           </div>
         ))}
       </div>
-      <a
-        href={`${API_BASE}/api/integrations/slack/connect`}
-        className="mt-4 inline-flex items-center gap-2 border border-teal-700 bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 active:translate-y-0"
-      >
-        Connect Slack
-        <Send size={15} aria-hidden="true" />
-      </a>
+      {!slackStatus.oauth_connected ? (
+        <a
+          href={`${API_BASE}/api/integrations/slack/connect`}
+          className="mt-4 inline-flex items-center gap-2 border border-teal-700 bg-teal-700 px-3 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 active:translate-y-0"
+        >
+          Connect Slack
+          <Send size={15} aria-hidden="true" />
+        </a>
+      ) : null}
       {slackStatus.last_error ? <p className="mt-3 text-sm leading-6 text-red-700">{slackStatus.last_error}</p> : null}
     </section>
   );
@@ -772,6 +1027,16 @@ function firstNextStep(recommendations: Recommendation[], risks: Risk[], pipelin
   const pipeline = pipelines[0];
   if (pipeline) return `Start with the ${pipeline.project_path} pipeline because it is ${pipeline.status}.`;
   return "No urgent records are active. Sync GitLab projects or inspect metrics to continue.";
+}
+
+function shouldAutoSync(summary: DashboardSummary) {
+  const latest = summary.latest_project_sync;
+  if (!latest) return true;
+  if ((summary.synced_projects ?? 0) === 0) return true;
+  if (latest.status === "failed") return false;
+  const finished = latest.finished_at ? new Date(latest.finished_at).getTime() : 0;
+  if (!finished) return true;
+  return Date.now() - finished > 10 * 60 * 1000;
 }
 
 function severityTone(severity: string): Tone {

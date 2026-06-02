@@ -21,9 +21,11 @@ from app.services.auth import AuthService, RequestContext, assign_workspace, cle
 from app.services.chat import ChatService
 from app.services.fix_plans import FixPlanService
 from app.services.gitlab_sync import GitLabProjectSyncService
+from app.services.grounded_recommendations import GroundedRecommendationEngine
 from app.services.metrics import MetricsService
 from app.services.observability import ObservabilityService
 from app.services.oauth import OAuthService, gitlab_client_for_workspace
+from app.services.repo_context import RepoContextService
 from app.services.slack_app import SlackAppService, parse_interaction_payload
 
 settings = get_settings()
@@ -242,6 +244,25 @@ def list_project_jobs(project_id: int, db: Session = Depends(get_db), context: R
     ).all()
 
 
+@app.post("/api/projects/{project_id}/repo-index/refresh", response_model=schemas.RepoIndexRunOut)
+def refresh_project_repo_index(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    project = _get_project_or_404(db, project_id, context)
+    client = gitlab_client_for_workspace(db, context.workspace.id)
+    return RepoContextService(db, client=client, workspace_id=context.workspace.id).index_project(project)
+
+
+@app.get("/api/projects/{project_id}/repo-index/files", response_model=list[schemas.RepoFileIndexOut])
+def list_project_repo_files(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    project = _get_project_or_404(db, project_id, context)
+    return RepoContextService(db, workspace_id=context.workspace.id).files(project, limit=max(1, min(limit, 100)))
+
+
+@app.get("/api/projects/{project_id}/repo-index/summary", response_model=schemas.RepoContextSummaryOut)
+def get_project_repo_index_summary(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    project = _get_project_or_404(db, project_id, context)
+    return RepoContextService(db, workspace_id=context.workspace.id).summary(project)
+
+
 @app.get("/api/projects/{project_id}/summary", response_model=schemas.ProjectSummaryOut)
 def get_project_summary(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     project = _get_project_or_404(db, project_id, context)
@@ -306,6 +327,8 @@ def get_project_summary(project_id: int, db: Session = Depends(get_db), context:
         .order_by(desc(models.MemoryRecord.created_at))
         .limit(10)
     ).all()
+    repo_service = RepoContextService(db, workspace_id=context.workspace.id)
+    repo_summary = repo_service.summary(project)
     return {
         "project": project,
         "open_merge_requests": open_merge_requests,
@@ -316,6 +339,9 @@ def get_project_summary(project_id: int, db: Session = Depends(get_db), context:
         "latest_recommendations": _ranked_recommendations(db, recommendations),
         "recent_actions": actions,
         "memory_records": memory_records,
+        "repo_files": repo_summary["priority_files"],
+        "latest_repo_index_run": repo_summary["latest_run"],
+        "repo_context_summary": repo_summary,
     }
 
 
@@ -452,6 +478,28 @@ def list_recommendations(
     if action_type:
         shaped = [item for item in shaped if item["action_type"] == action_type]
     return shaped[:limit]
+
+
+@app.post("/api/projects/{project_id}/recommendations/grounded", response_model=schemas.GroundedRecommendationOut)
+def generate_grounded_recommendation(
+    project_id: int,
+    request: schemas.GroundedRecommendationCreateIn,
+    db: Session = Depends(get_db),
+    context: RequestContext = Depends(get_current_context),
+):
+    project = _get_project_or_404(db, project_id, context)
+    engine = GroundedRecommendationEngine(db, workspace_id=context.workspace.id)
+    bundle = engine.recommend(project=project, question=request.question, intent=request.intent)
+    saved = None
+    if request.persist:
+        saved_record = engine.create_recommendation(
+            project=project,
+            question=request.question,
+            intent=request.intent,
+            channel=request.channel,
+        )
+        saved = _shape_recommendation(db, saved_record)
+    return {**bundle, "saved_recommendation": saved}
 
 
 @app.get("/api/action-dispatches", response_model=list[schemas.ActionDispatchOut])
@@ -724,8 +772,8 @@ async def invoke_agent_tool(tool_name: str, request: Request, db: Session = Depe
 async def mcp_json_rpc(request: Request, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     payload = await request.json()
     if isinstance(payload, list):
-        return [_mcp_response(item, db, context.workspace.id) for item in payload]
-    response = _mcp_response(payload, db, context.workspace.id)
+        return [_mcp_response(item, db, context) for item in payload]
+    response = _mcp_response(payload, db, context)
     if response is None:
         return Response(status_code=202)
     return response
@@ -738,6 +786,13 @@ def dashboard_summary(db: Session = Depends(get_db), context: RequestContext = D
     merge_requests = db.scalars(select(models.MergeRequestSignal).where(workspace_filter(models.MergeRequestSignal, context.workspace.id)).order_by(desc(models.MergeRequestSignal.created_at)).limit(200)).all()
     incidents = db.scalars(select(models.IncidentRecord).where(workspace_filter(models.IncidentRecord, context.workspace.id)).where(models.IncidentRecord.status == "open").order_by(desc(models.IncidentRecord.created_at)).limit(200)).all()
     recommendations = db.scalars(select(models.Recommendation).where(workspace_filter(models.Recommendation, context.workspace.id)).order_by(desc(models.Recommendation.created_at)).limit(100)).all()
+    projects = db.scalars(select(models.GitLabProject).where(workspace_filter(models.GitLabProject, context.workspace.id)).order_by(desc(models.GitLabProject.synced_at)).limit(500)).all()
+    latest_sync = db.scalars(
+        select(models.ProjectSyncRun)
+        .where(workspace_filter(models.ProjectSyncRun, context.workspace.id))
+        .order_by(desc(models.ProjectSyncRun.started_at))
+        .limit(1)
+    ).first()
 
     visible_recommendations = _ranked_recommendations(db, recommendations)[:6]
     return {
@@ -745,8 +800,11 @@ def dashboard_summary(db: Session = Depends(get_db), context: RequestContext = D
         "failed_pipelines": len(_latest_by(pipelines, lambda item: f"{item.project_path}:{item.pipeline_id}:{item.likely_cause}")),
         "blocked_merge_requests": len(_latest_by([mr for mr in merge_requests if mr.bottleneck_level in {"blocked", "stale"}], lambda mr: f"{mr.project_path}:{mr.merge_request_iid}")),
         "open_incidents": len(_latest_by(incidents, lambda incident: f"{incident.project_path}:{incident.title}:{incident.probable_root_cause}")),
+        "synced_projects": len(projects),
+        "latest_project_sync": latest_sync,
         "latest_recommendations": visible_recommendations,
         "slack_status": _slack_status(db, context),
+        "gitlab_status": OAuthService(db).gitlab_status(workspace_id=context.workspace.id),
     }
 
 
@@ -770,10 +828,11 @@ async def _json_or_empty(request: Request) -> dict:
     return body if isinstance(body, dict) else {}
 
 
-def _mcp_response(payload: dict, db: Session, workspace_id: int | None = None) -> dict | None:
+def _mcp_response(payload: dict, db: Session, context: RequestContext | None = None) -> dict | None:
     request_id = payload.get("id")
     method = payload.get("method")
     params = payload.get("params") or {}
+    workspace_id = context.workspace.id if context else None
     service = AgentToolService(db, workspace_id=workspace_id)
 
     if request_id is None and str(method).startswith("notifications/"):
@@ -788,14 +847,39 @@ def _mcp_response(payload: dict, db: Session, workspace_id: int | None = None) -
         elif method == "tools/list":
             result = {"tools": service.list_mcp_tools()}
         elif method == "tools/call":
-            result = mcp_text_result(service.call_tool(str(params.get("name") or ""), params.get("arguments") or {}))
+            tool_name = str(params.get("name") or "")
+            result = mcp_text_result(service.call_tool(tool_name, params.get("arguments") or {}))
+            _audit_mcp_tool_call(db, context, tool_name, params.get("arguments") or {}, success=True)
         else:
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method not found: {method}"}}
         return {"jsonrpc": "2.0", "id": request_id, "result": result}
     except LookupError as exc:
+        if method == "tools/call":
+            _audit_mcp_tool_call(db, context, str(params.get("name") or ""), params.get("arguments") or {}, success=False, error=str(exc))
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32004, "message": str(exc)}}
     except Exception as exc:
+        if method == "tools/call":
+            _audit_mcp_tool_call(db, context, str(params.get("name") or ""), params.get("arguments") or {}, success=False, error=str(exc))
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32603, "message": str(exc)}}
+
+
+def _audit_mcp_tool_call(db: Session, context: RequestContext | None, tool_name: str, arguments: dict, *, success: bool, error: str = "") -> None:
+    if context is None:
+        return
+    AuthService(db).audit(
+        workspace_id=context.workspace.id,
+        user_id=context.user.id,
+        event_type="agent.tool_call",
+        target_type="mcp_tool",
+        target_id=tool_name,
+        metadata={
+            "success": success,
+            "error": error,
+            "argument_keys": sorted(arguments.keys()) if isinstance(arguments, dict) else [],
+            "runtime": "mcp",
+        },
+    )
+    db.commit()
 
 
 def _ranked_recommendations(db: Session, recommendations: list[models.Recommendation]) -> list[dict]:

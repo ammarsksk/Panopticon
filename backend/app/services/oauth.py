@@ -21,7 +21,7 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_SCOPES = ["openid", "email", "profile"]
-GITLAB_SCOPES = ["api", "read_user", "read_repository", "write_repository"]
+GITLAB_SCOPES = ["api", "read_user"]
 SLACK_SCOPES = ["incoming-webhook", "commands", "chat:write"]
 
 
@@ -68,7 +68,7 @@ class OAuthService:
             "client_id": self.settings.gitlab_oauth_client_id,
             "redirect_uri": gitlab_redirect_uri(self.settings),
             "response_type": "code",
-            "scope": " ".join(GITLAB_SCOPES),
+            "scope": " ".join(self.settings.gitlab_oauth_scopes or GITLAB_SCOPES),
             "state": state,
         }
         return f"{self.settings.gitlab_base_url.rstrip('/')}/oauth/authorize?{urlencode(params)}"
@@ -149,7 +149,7 @@ class OAuthService:
             account_label=username,
             token_payload=token_payload,
             metadata={"username": username, "name": profile.get("name") or "", "web_url": profile.get("web_url") or ""},
-            scopes=str(token_payload.get("scope") or " ".join(GITLAB_SCOPES)).split(),
+            scopes=str(token_payload.get("scope") or " ".join(self.settings.gitlab_oauth_scopes or GITLAB_SCOPES)).split(),
         )
         AuthService(self.db).audit(
             workspace_id=state_record.workspace_id,

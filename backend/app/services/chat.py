@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from app import models
 from app.agents.gemini import GeminiReasoner
 from app.services.agent_tools import AgentToolService
+from app.services.fix_plans import FixPlanService
+from app.services.grounded_recommendations import GroundedRecommendationEngine
 
 
 class ChatService:
@@ -21,9 +23,18 @@ class ChatService:
 
         intent = _classify_intent(message)
         context = self._context(project)
+        context["grounded_recommendation"] = GroundedRecommendationEngine(self.db, workspace_id=self.workspace_id).recommend(
+            project=project,
+            question=message,
+            intent=intent,
+            context=context,
+            use_live_reasoner=False,
+        )
         prepared_actions = self._prepare_actions_if_requested(message, project)
+        prepared_fix_plans = self._prepare_fix_plans_if_requested(message, project, context)
         citations = self._citations(intent, context, prepared_actions)
         deterministic_answer = self._compose_answer(intent, message, project, context, prepared_actions)
+        deterministic_answer = self._append_prepared_fix_plan_text(deterministic_answer, prepared_fix_plans)
         answer = self._llm_answer(
             question=message,
             intent=intent,
@@ -48,6 +59,7 @@ class ChatService:
             "user_message": user_message,
             "assistant_message": assistant_message,
             "prepared_actions": prepared_actions,
+            "prepared_fix_plans": prepared_fix_plans,
         }
 
     def _project(self, project_id: int | None) -> models.GitLabProject | None:
@@ -111,6 +123,51 @@ class ChatService:
             return []
 
         return self.tools.prepare_action_records(project=project, limit=10)
+
+    def _prepare_fix_plans_if_requested(self, message: str, project: models.GitLabProject | None, context: dict) -> list[models.FixPlan]:
+        lowered = message.lower()
+        wants_fix = any(
+            phrase in lowered
+            for phrase in [
+                "fix plan",
+                "safe fix",
+                "prepare fix",
+                "create fix",
+                "code change",
+                "make change",
+                "generate patch",
+                "patch",
+                "create branch",
+                "open mr",
+                "merge request fix",
+            ]
+        )
+        if not wants_fix or not project:
+            return []
+
+        source_type, source_id = _best_fix_source(context)
+        plan = FixPlanService(self.db, workspace_id=self.workspace_id).create(
+            project_id=project.id,
+            source_type=source_type,
+            source_id=source_id,
+            problem_statement=message,
+            fix_type=_requested_fix_type(message),
+        )
+        return [plan]
+
+    def _append_prepared_fix_plan_text(self, answer: str, prepared_fix_plans: list[models.FixPlan]) -> str:
+        if not prepared_fix_plans:
+            return answer
+        lines = [answer, ""]
+        for plan in prepared_fix_plans:
+            diff_count = len((plan.plan_payload or {}).get("diff_preview") or [])
+            commands = (plan.plan_payload or {}).get("test_plan", {}).get("commands", [])
+            lines.append(
+                f"Prepared safe fix plan #{plan.id}: {plan.title}. It targets branch {plan.branch_name}, includes {diff_count} diff preview(s), and requires approval before any GitLab write."
+            )
+            if commands:
+                lines.append(f"Validation to run before merge: {commands[0]}.")
+        return "\n".join(lines)
 
     def _compose_answer(self, intent: str, question: str, project: models.GitLabProject | None, context: dict, prepared_actions: list[models.AgentAction]) -> str:
         subject = project.project_path if project else "all synced projects"
@@ -181,6 +238,8 @@ class ChatService:
             ids = ", ".join(str(action.id) for action in prepared_actions)
             parts.append(f"- I prepared action proposal(s) {ids}. They still require approval in the Actions page before execution.")
 
+        self._append_grounded(parts, context)
+
         if "why" in question.lower() or "what should" in question.lower():
             parts.append("Recommended next step: inspect the cited risk, pipeline, and recommendation records first; then approve only the proposed action whose payload matches what you want sent.")
 
@@ -210,6 +269,7 @@ class ChatService:
             parts.append("- No parsed failed job or pipeline insight is stored yet, so Panopticon cannot name an exact root cause from logs.")
         else:
             parts.append("- No pipeline snapshots, failed jobs, or pipeline insights are stored for this scope.")
+        self._append_grounded(parts, context)
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
 
@@ -235,6 +295,7 @@ class ChatService:
             parts.append("- No active risks, failures, incidents, or pending approvals are stored for this scope.")
         else:
             parts.append("- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.")
+        self._append_grounded(parts, context)
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
 
@@ -254,6 +315,7 @@ class ChatService:
         if recommendations:
             rec = recommendations[0]
             parts.append(f"- Related recommendation: {rec.source_type} through {rec.channel}, status {rec.status}.")
+        self._append_grounded(parts, context)
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
 
@@ -265,6 +327,7 @@ class ChatService:
         for mr in merge_requests[:3]:
             draft = "draft" if mr.draft else mr.state
             parts.append(f"- !{mr.merge_request_iid} {mr.title}: {draft}, {mr.source_branch} -> {mr.target_branch}, author {mr.author_username or 'unknown'}.")
+        self._append_grounded(parts, context)
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
 
@@ -282,6 +345,7 @@ class ChatService:
             parts.append("- No incidents are stored for this scope.")
         if memory:
             parts.append(f"- Related memory: {memory[0].summary}")
+        self._append_grounded(parts, context)
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
 
@@ -295,6 +359,7 @@ class ChatService:
             parts.append(f"- Latest action: #{first.id} {first.title}, {first.status}, channel {first.channel}.")
         else:
             parts.append("- No proposed or executed actions are stored for this scope.")
+        self._append_grounded(parts, context)
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
 
@@ -307,6 +372,7 @@ class ChatService:
             parts.append(f"- {record.memory_type}: {record.summary}")
             if record.remediation:
                 parts.append(f"  Next remediation: {record.remediation[0]}")
+        self._append_grounded(parts, context)
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
 
@@ -315,16 +381,27 @@ class ChatService:
             ids = ", ".join(str(action.id) for action in prepared_actions)
             parts.append(f"- Prepared action proposal(s): {ids}. They require approval in the Actions page before execution.")
 
+    def _append_grounded(self, parts: list[str], context: dict) -> None:
+        bundle = context.get("grounded_recommendation") or {}
+        if not bundle:
+            return
+        confidence = int(float(bundle.get("confidence") or 0) * 100)
+        recommendation = str(bundle.get("recommendation") or "").strip()
+        next_actions = bundle.get("next_actions") or []
+        parts.append(f"- Grounded recommendation ({confidence}% confidence): {recommendation}")
+        if next_actions:
+            parts.append(f"- Grounded next step: {next_actions[0]}")
+
     def _citations(self, intent: str, context: dict, prepared_actions: list[models.AgentAction]) -> list[dict]:
         intent_sources = {
-            "pipeline_failure": ["pipeline_insights", "failed_jobs", "pipelines"],
-            "priority": ["risks", "pipeline_insights", "failed_jobs", "incidents", "actions"],
-            "risk": ["risks", "recommendations"],
-            "merge_request": ["merge_requests", "risks"],
+            "pipeline_failure": ["pipeline_insights", "failed_jobs", "pipelines", "repo_files"],
+            "priority": ["risks", "pipeline_insights", "failed_jobs", "incidents", "actions", "repo_files"],
+            "risk": ["risks", "recommendations", "repo_files"],
+            "merge_request": ["merge_requests", "risks", "repo_files"],
             "incident": ["incidents", "memory", "recommendations"],
             "actions": ["actions", "recommendations"],
             "memory": ["memory", "incidents"],
-            "summary": ["risks", "pipeline_insights", "pipelines", "merge_requests", "incidents", "recommendations", "actions", "memory"],
+            "summary": ["risks", "pipeline_insights", "pipelines", "merge_requests", "incidents", "recommendations", "actions", "memory", "repo_files"],
         }
         citations: list[dict] = []
         for key in intent_sources.get(intent, intent_sources["summary"]):
@@ -380,6 +457,10 @@ def _citation(kind: str, record) -> dict:
     elif isinstance(record, models.AgentAction):
         label = f"Action #{record.id}: {record.title}"
         summary = record.status
+    elif isinstance(record, models.RepoFileIndex):
+        label = f"{record.file_type} file: {record.file_path}"
+        flags = ", ".join((record.signals or {}).get("risk_flags") or [])
+        summary = flags or record.language or record.ref
     else:
         label = getattr(record, "title", "") or getattr(record, "name", "") or getattr(record, "summary", "") or kind
         summary = getattr(record, "summary", "") or getattr(record, "likely_cause", "") or getattr(record, "probable_root_cause", "") or getattr(record, "status", "")
@@ -396,6 +477,20 @@ def _llm_evidence(intent: str, context: dict, citations: list[dict], prepared_ac
     evidence: list[dict] = []
     for kind, records in context.items():
         if kind == "project":
+            continue
+        if kind == "grounded_recommendation" and isinstance(records, dict):
+            evidence.append(
+                {
+                    "type": "grounded_recommendation",
+                    "issue_type": records.get("issue_type"),
+                    "severity": records.get("severity"),
+                    "confidence": records.get("confidence"),
+                    "grounded": records.get("grounded"),
+                    "recommendation": records.get("recommendation"),
+                    "next_actions": records.get("next_actions", []),
+                    "evidence": records.get("evidence", [])[:8],
+                }
+            )
             continue
         for record in records[:3]:
             if (kind, record.id) in selected_ids:
@@ -514,6 +609,18 @@ def _record_evidence(kind: str, record) -> dict:
                 "payload_preview": record.payload_preview,
             }
         )
+    elif isinstance(record, models.RepoFileIndex):
+        base.update(
+            {
+                "project_path": record.project_path,
+                "file_path": record.file_path,
+                "ref": record.ref,
+                "file_type": record.file_type,
+                "language": record.language,
+                "signals": record.signals,
+                "content_excerpt": record.content_excerpt[:2500],
+            }
+        )
     return base
 
 
@@ -543,3 +650,32 @@ def _classify_intent(message: str) -> str:
     if any(term in text for term in ["memory", "remember", "history", "recurring", "previous"]):
         return "memory"
     return "summary"
+
+
+def _best_fix_source(context: dict) -> tuple[str, str]:
+    risks = sorted(context.get("risks", []), key=lambda risk: getattr(risk, "score", 0), reverse=True)
+    if risks:
+        return "risk", str(risks[0].id)
+    pipeline_insights = context.get("pipeline_insights", [])
+    if pipeline_insights:
+        return "pipeline", str(pipeline_insights[0].id)
+    incidents = context.get("incidents", [])
+    if incidents:
+        return "incident", str(incidents[0].id)
+    recommendations = context.get("recommendations", [])
+    if recommendations:
+        return "recommendation", str(recommendations[0].id)
+    return "manual", ""
+
+
+def _requested_fix_type(message: str) -> str:
+    text = message.lower()
+    if "timeout" in text or "retry" in text or "ci" in text or "pipeline" in text:
+        return "pipeline_timeout"
+    if "test" in text or "coverage" in text:
+        return "test_scaffold"
+    if "deployment" in text or "health" in text or "readiness" in text:
+        return "deployment_healthcheck"
+    if "rollback" in text or "incident" in text or "runbook" in text:
+        return "rollback_runbook"
+    return ""

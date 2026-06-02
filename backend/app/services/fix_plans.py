@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from difflib import unified_diff
 from datetime import datetime, timezone
 from typing import Any
 
@@ -8,6 +9,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.services.grounded_recommendations import GroundedRecommendationEngine
 from app.services.oauth import gitlab_client_for_workspace
 
 
@@ -47,6 +49,13 @@ class FixPlanService:
         base_branch = project.default_branch or "main"
         branch_name = _branch_name(project.project_path, selected_fix_type)
         summary = _summary(source, problem_statement)
+        repo_files = self._repo_files(project)
+        grounded = GroundedRecommendationEngine(self.db, workspace_id=self.workspace_id).recommend(
+            project=project,
+            question=problem_statement or summary,
+            intent=_intent_for_fix_type(selected_fix_type),
+            use_live_reasoner=False,
+        )
         payload = _plan_payload(
             project=project,
             source=source,
@@ -56,6 +65,8 @@ class FixPlanService:
             fix_type=selected_fix_type,
             branch_name=branch_name,
             base_branch=base_branch,
+            repo_files=repo_files,
+            grounded=grounded,
         )
         self._validate_plan_payload(payload, project.default_branch or "main")
         plan = models.FixPlan(
@@ -209,6 +220,17 @@ class FixPlanService:
         except ValueError:
             return None
 
+    def _repo_files(self, project: models.GitLabProject) -> list[models.RepoFileIndex]:
+        stmt = (
+            select(models.RepoFileIndex)
+            .where(models.RepoFileIndex.project_id == project.id)
+            .order_by(desc(models.RepoFileIndex.indexed_at))
+            .limit(40)
+        )
+        if self.workspace_id is not None:
+            stmt = stmt.where(models.RepoFileIndex.workspace_id == self.workspace_id)
+        return list(self.db.scalars(stmt))
+
     def _validate_plan_payload(self, payload: dict[str, Any], default_branch: str) -> None:
         branch = str(payload.get("branch_name") or "")
         base_branch = str(payload.get("base_branch") or "")
@@ -216,6 +238,8 @@ class FixPlanService:
             raise ValueError("Fix plan branch name is required")
         if branch == default_branch or branch in {"main", "master"} and branch == base_branch:
             raise ValueError("Fix plan cannot write to the default branch")
+        if not payload.get("diff_preview"):
+            raise ValueError("Fix plan must include a diff preview")
         files = payload.get("files") or []
         if not files:
             raise ValueError("Fix plan must include at least one file change")
@@ -228,6 +252,11 @@ class FixPlanService:
                 raise ValueError(f"Unsupported commit action for {path}: {action}")
             if not content.strip():
                 raise ValueError(f"File change for {path} has no content")
+        validation = payload.get("validation") or {}
+        if validation.get("default_branch_write"):
+            raise ValueError("Fix plan validation detected a default-branch write")
+        if validation.get("unsafe_paths"):
+            raise ValueError(f"Fix plan validation detected unsafe path(s): {', '.join(validation['unsafe_paths'])}")
 
 
 def _plan_payload(
@@ -240,13 +269,34 @@ def _plan_payload(
     fix_type: str,
     branch_name: str,
     base_branch: str,
+    repo_files: list[models.RepoFileIndex],
+    grounded: dict[str, Any],
 ) -> dict[str, Any]:
     title = _title(fix_type, project.project_path)
     evidence = _evidence(source)
+    evidence_bundle = _evidence_bundle(project, source, repo_files, grounded)
     actions = _next_actions(source, fix_type)
     slug = _slug(f"{fix_type}-{source_type or 'manual'}-{source_id or project.id}")
     runbook_path = f"docs/panopticon/{slug}.md"
     guidance_path = f".gitlab/merge_request_templates/panopticon-{slug}.md"
+    files = [
+        {
+            "path": runbook_path,
+            "commit_action": "create",
+            "purpose": "Store the investigation, validation steps, and rollback notes beside the project.",
+            "content": _runbook_content(project, fix_type, evidence, actions, grounded),
+        },
+        {
+            "path": guidance_path,
+            "commit_action": "create",
+            "purpose": "Give reviewers a ready checklist for this class of operational fix.",
+            "content": _mr_template_content(project, fix_type, evidence, actions, grounded),
+        },
+    ]
+    files.extend(_repo_patch_files(project, fix_type, repo_files))
+    diff_preview = [_diff_for_change(file_change, repo_files) for file_change in files]
+    test_plan = _test_plan(repo_files, fix_type)
+    validation = _validation(files, branch_name, base_branch, project.default_branch or "main", evidence_bundle, test_plan)
     return {
         "title": title,
         "project_path": project.project_path,
@@ -260,20 +310,18 @@ def _plan_payload(
             "default_branch_write": False,
             "auto_merge": False,
             "destructive_changes": False,
+            "requires_merge_request": True,
+            "secrets_editing_blocked": True,
         },
-        "files": [
-            {
-                "path": runbook_path,
-                "commit_action": "create",
-                "purpose": "Store the investigation, validation steps, and rollback notes beside the project.",
-                "content": _runbook_content(project, fix_type, evidence, actions),
-            },
-            {
-                "path": guidance_path,
-                "commit_action": "create",
-                "purpose": "Give reviewers a ready checklist for this class of operational fix.",
-                "content": _mr_template_content(project, fix_type, evidence, actions),
-            },
+        "evidence_bundle": evidence_bundle,
+        "files": files,
+        "diff_preview": diff_preview,
+        "validation": validation,
+        "test_plan": test_plan,
+        "rollback": [
+            "Close the generated merge request without merging if validation fails.",
+            "Delete the generated branch after rejection or after reverting.",
+            "If merged and harmful, revert the merge commit and re-run the cited validation commands.",
         ],
         "manual_patch_suggestions": _manual_patch_suggestions(fix_type),
         "review_checklist": [
@@ -300,6 +348,8 @@ def _mr_description(plan: models.FixPlan) -> str:
     payload = plan.plan_payload or {}
     files = payload.get("files") or []
     checklist = payload.get("review_checklist") or []
+    tests = payload.get("test_plan", {}).get("commands", [])
+    evidence = payload.get("evidence_bundle", [])
     lines = [
         "## Panopticon fix plan",
         "",
@@ -312,11 +362,17 @@ def _mr_description(plan: models.FixPlan) -> str:
     lines.extend(["", "## Safety checklist"])
     for item in checklist:
         lines.append(f"- [ ] {item}")
+    lines.extend(["", "## Evidence"])
+    for item in evidence[:8]:
+        lines.append(f"- {item.get('label')}: {item.get('summary')}")
+    lines.extend(["", "## Validation commands"])
+    for command in tests or ["Review generated diff manually."]:
+        lines.append(f"- `{command}`")
     lines.extend(["", "_Generated by Panopticon. Review and test before merging._"])
     return "\n".join(lines)
 
 
-def _runbook_content(project: models.GitLabProject, fix_type: str, evidence: list[str], actions: list[str]) -> str:
+def _runbook_content(project: models.GitLabProject, fix_type: str, evidence: list[str], actions: list[str], grounded: dict[str, Any]) -> str:
     return "\n".join(
         [
             f"# Panopticon Remediation Plan: {project.project_path}",
@@ -325,6 +381,10 @@ def _runbook_content(project: models.GitLabProject, fix_type: str, evidence: lis
             "",
             "## Evidence",
             *(f"- {item}" for item in (evidence or ["No stored evidence was available."])),
+            "",
+            "## Grounded Recommendation",
+            grounded.get("recommendation", "No grounded recommendation was available."),
+            f"Confidence: {int(float(grounded.get('confidence') or 0) * 100)}%",
             "",
             "## Recommended Actions",
             *(f"- {item}" for item in (actions or ["Review the failing pipeline, affected files, and service owner notes."])),
@@ -342,7 +402,7 @@ def _runbook_content(project: models.GitLabProject, fix_type: str, evidence: lis
     )
 
 
-def _mr_template_content(project: models.GitLabProject, fix_type: str, evidence: list[str], actions: list[str]) -> str:
+def _mr_template_content(project: models.GitLabProject, fix_type: str, evidence: list[str], actions: list[str], grounded: dict[str, Any]) -> str:
     return "\n".join(
         [
             f"# Panopticon Review Checklist for {project.project_path}",
@@ -357,6 +417,9 @@ def _mr_template_content(project: models.GitLabProject, fix_type: str, evidence:
             "",
             "## Evidence Summary",
             *(f"- {item}" for item in evidence[:6]),
+            "",
+            "## Agent Confidence",
+            f"- {int(float(grounded.get('confidence') or 0) * 100)}% grounded confidence",
             "",
             "## Next Actions",
             *(f"- {item}" for item in actions[:6]),
@@ -404,6 +467,196 @@ def _validate_safe_path(path: str) -> None:
         raise ValueError(f"Unsafe file path is not allowed: {path}")
 
 
+def _repo_patch_files(project: models.GitLabProject, fix_type: str, repo_files: list[models.RepoFileIndex]) -> list[dict[str, str]]:
+    if fix_type in {"pipeline_timeout", "ci_retry_guidance"}:
+        ci = _find_repo_file(repo_files, ".gitlab-ci.yml")
+        if ci:
+            return [
+                {
+                    "path": ci.file_path,
+                    "commit_action": "update",
+                    "purpose": "Add bounded CI timeout/retry guidance to the indexed GitLab CI file for reviewer validation.",
+                    "content": _patch_ci_timeout(ci.content_excerpt),
+                }
+            ]
+    if fix_type == "deployment_healthcheck":
+        deploy = _find_first_type(repo_files, "deployment")
+        if deploy:
+            return [
+                {
+                    "path": deploy.file_path,
+                    "commit_action": "update",
+                    "purpose": "Add reviewer-visible readiness validation guidance to the indexed deployment file.",
+                    "content": _append_once(
+                        deploy.content_excerpt,
+                        "\n# Panopticon validation: confirm readiness/liveness probes and post-deploy smoke checks before merge.\n",
+                    ),
+                }
+            ]
+    if fix_type == "test_scaffold":
+        source = _find_first_type(repo_files, "source")
+        if source:
+            path = _test_scaffold_path(source)
+            return [
+                {
+                    "path": path,
+                    "commit_action": "create",
+                    "purpose": "Create a focused regression-test scaffold tied to the indexed source context.",
+                    "content": _test_scaffold_content(project, source),
+                }
+            ]
+    return []
+
+
+def _find_repo_file(repo_files: list[models.RepoFileIndex], path: str) -> models.RepoFileIndex | None:
+    return next((item for item in repo_files if item.file_path == path), None)
+
+
+def _find_first_type(repo_files: list[models.RepoFileIndex], file_type: str) -> models.RepoFileIndex | None:
+    return next((item for item in repo_files if item.file_type == file_type), None)
+
+
+def _patch_ci_timeout(content: str) -> str:
+    base = content.rstrip()
+    if "timeout:" not in base:
+        base = _append_once(base, "\n\n# Panopticon safety: keep CI waits bounded while investigating dependency latency.\ntimeout: 20m\n")
+    if "retry:" not in base:
+        base = _append_once(base, "\n# Panopticon safety: retry only transient runner/system failures, not deterministic test failures.\nretry:\n  max: 1\n  when:\n    - runner_system_failure\n    - stuck_or_timeout_failure\n")
+    return base + "\n"
+
+
+def _append_once(content: str, addition: str) -> str:
+    marker = addition.strip().splitlines()[0]
+    if marker in content:
+        return content.rstrip() + "\n"
+    return content.rstrip() + addition
+
+
+def _test_scaffold_path(source: models.RepoFileIndex) -> str:
+    stem = source.file_path.rsplit("/", 1)[-1].rsplit(".", 1)[0] or "service"
+    if source.language == "python":
+        return f"tests/panopticon/test_{_slug(stem)}_regression.py"
+    if source.language in {"javascript", "typescript"}:
+        return f"tests/panopticon/{_slug(stem)}.spec.ts"
+    return f"tests/panopticon/{_slug(stem)}_regression.md"
+
+
+def _test_scaffold_content(project: models.GitLabProject, source: models.RepoFileIndex) -> str:
+    if source.language == "python":
+        return "\n".join(
+            [
+                f'"""Panopticon regression scaffold for {project.project_path}.',
+                f"Source context: {source.file_path}",
+                '"""',
+                "",
+                "",
+                "def test_panopticon_regression_placeholder():",
+                "    # Replace with a focused assertion for the changed service path before merging.",
+                "    assert True",
+                "",
+            ]
+        )
+    if source.language in {"javascript", "typescript"}:
+        return "\n".join(
+            [
+                f"// Panopticon regression scaffold for {project.project_path}.",
+                f"// Source context: {source.file_path}",
+                "describe('panopticon regression', () => {",
+                "  it('captures the changed service behavior before merge', () => {",
+                "    expect(true).toBe(true);",
+                "  });",
+                "});",
+                "",
+            ]
+        )
+    return f"# Panopticon regression scaffold\n\nSource context: `{source.file_path}`\n\nReplace this scaffold with a focused automated test before merging.\n"
+
+
+def _diff_for_change(file_change: dict[str, str], repo_files: list[models.RepoFileIndex]) -> dict[str, str]:
+    path = str(file_change.get("path") or "")
+    old = ""
+    existing = _find_repo_file(repo_files, path)
+    if existing:
+        old = existing.content_excerpt
+    new = str(file_change.get("content") or "")
+    diff = "\n".join(
+        unified_diff(
+            old.splitlines(),
+            new.splitlines(),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            lineterm="",
+        )
+    )
+    return {"path": path, "commit_action": str(file_change.get("commit_action") or "create"), "diff": diff}
+
+
+def _evidence_bundle(project: models.GitLabProject, source, repo_files: list[models.RepoFileIndex], grounded: dict[str, Any]) -> list[dict[str, Any]]:
+    bundle = []
+    for item in (grounded.get("evidence") or [])[:8]:
+        bundle.append(item)
+    if source:
+        bundle.append({"type": _source_type_for(source), "id": getattr(source, "id", ""), "label": _summary(source, ""), "summary": _summary(source, "")})
+    for repo_file in repo_files[:5]:
+        bundle.append(
+            {
+                "type": "repo_file",
+                "id": repo_file.id,
+                "label": repo_file.file_path,
+                "summary": f"{repo_file.file_type} {repo_file.language}".strip(),
+                "file_path": repo_file.file_path,
+            }
+        )
+    seen = set()
+    unique = []
+    for item in bundle:
+        key = (item.get("type"), item.get("id"), item.get("file_path"))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique[:12]
+
+
+def _test_plan(repo_files: list[models.RepoFileIndex], fix_type: str) -> dict[str, Any]:
+    commands: list[str] = []
+    paths = {item.file_path.lower() for item in repo_files}
+    languages = {item.language for item in repo_files}
+    if "python" in languages or "requirements.txt" in paths or "pyproject.toml" in paths:
+        commands.append("python -m pytest")
+    if "package.json" in paths or "javascript" in languages or "typescript" in languages:
+        commands.append("npm test")
+    if any(path.endswith(".gitlab-ci.yml") for path in paths) or fix_type in {"pipeline_timeout", "ci_retry_guidance"}:
+        commands.append("Validate .gitlab-ci.yml in GitLab CI lint before merge")
+    if any("deploy/" in path or "kubernetes/" in path or "k8s/" in path for path in paths):
+        commands.append("Run deployment manifest validation or kubectl dry-run in the target environment")
+    if not commands:
+        commands.append("Run the impacted project test command before merge")
+    return {"commands": commands, "executed": False, "execution_note": "Panopticon generated the plan locally; commands must run in CI or a checked-out repository before merge."}
+
+
+def _validation(files: list[dict[str, str]], branch_name: str, base_branch: str, default_branch: str, evidence_bundle: list[dict[str, Any]], test_plan: dict[str, Any]) -> dict[str, Any]:
+    unsafe_paths = []
+    for file_change in files:
+        try:
+            _validate_safe_path(str(file_change.get("path") or ""))
+        except ValueError:
+            unsafe_paths.append(str(file_change.get("path") or ""))
+    return {
+        "branch_safe": bool(branch_name and branch_name not in {default_branch, "main", "master"}),
+        "base_branch": base_branch,
+        "default_branch_write": branch_name == default_branch,
+        "unsafe_paths": unsafe_paths,
+        "destructive_changes": False,
+        "approval_required": True,
+        "merge_request_required": True,
+        "diff_preview_available": True,
+        "evidence_count": len(evidence_bundle),
+        "evidence_strong": len(evidence_bundle) >= 2,
+        "test_commands_count": len(test_plan.get("commands") or []),
+    }
+
+
 def _fix_type(requested: str, source, problem_statement: str) -> str:
     if requested in SAFE_FIX_TYPES:
         return requested
@@ -417,6 +670,16 @@ def _fix_type(requested: str, source, problem_statement: str) -> str:
     if "rollback" in text or "incident" in text:
         return "rollback_runbook"
     return "ci_retry_guidance"
+
+
+def _intent_for_fix_type(fix_type: str) -> str:
+    if fix_type in {"pipeline_timeout", "ci_retry_guidance"}:
+        return "pipeline_failure"
+    if fix_type in {"deployment_healthcheck", "rollback_runbook"}:
+        return "risk"
+    if fix_type == "test_scaffold":
+        return "risk"
+    return "summary"
 
 
 def _title(fix_type: str, project_path: str) -> str:

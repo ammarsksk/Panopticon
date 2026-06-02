@@ -122,7 +122,7 @@ function GitLabIntegrationPanel({ integration }: { integration: OAuthIntegration
             GitLab OAuth
           </div>
           <h2 className="mt-2 text-lg font-semibold text-slate-950">
-            {integration.connected ? `Connected as ${integration.account_label || "GitLab user"}` : "Connect GitLab to sync real projects"}
+            {integration.connected ? `GitLab connected: ${integration.account_label || "GitLab user"}` : "Connect GitLab to sync real projects"}
           </h2>
           <p className="mt-1 text-sm leading-6 text-slate-600">
             {integration.connected
@@ -135,13 +135,15 @@ function GitLabIntegrationPanel({ integration }: { integration: OAuthIntegration
         <div className="flex items-center gap-3">
           <Badge label={integration.configured ? "oauth configured" : "oauth missing"} tone={integration.configured ? "good" : "warn"} />
           <Badge label={integration.connected ? "connected" : "not connected"} tone={integration.connected ? "good" : "warn"} />
-          <a
-            href={`${API_BASE}/api/integrations/gitlab/connect`}
-            className="inline-flex items-center gap-2 border border-teal-700 bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
-          >
-            <KeyRound size={16} />
-            {integration.connected ? "Reconnect GitLab" : "Connect GitLab"}
-          </a>
+          {!integration.connected ? (
+            <a
+              href={`${API_BASE}/api/integrations/gitlab/connect`}
+              className="inline-flex items-center gap-2 border border-teal-700 bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+            >
+              <KeyRound size={16} />
+              Connect GitLab
+            </a>
+          ) : null}
         </div>
       </div>
       {integration.scopes.length ? <p className="mt-3 text-xs text-slate-500">Scopes: {integration.scopes.join(", ")}</p> : null}

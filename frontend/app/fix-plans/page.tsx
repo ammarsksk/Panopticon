@@ -25,6 +25,11 @@ function PlanCard({ plan }: { plan: FixPlan }) {
   const files = plan.plan_payload.files ?? [];
   const suggestions = plan.plan_payload.manual_patch_suggestions ?? [];
   const checklist = plan.plan_payload.review_checklist ?? [];
+  const diffs = plan.plan_payload.diff_preview ?? [];
+  const evidence = plan.plan_payload.evidence_bundle ?? [];
+  const validation = plan.plan_payload.validation ?? {};
+  const testCommands = plan.plan_payload.test_plan?.commands ?? [];
+  const rollback = plan.plan_payload.rollback ?? [];
 
   return (
     <article className="border border-slate-200 bg-white p-4">
@@ -72,6 +77,39 @@ function PlanCard({ plan }: { plan: FixPlan }) {
           <div className="border border-slate-200 bg-slate-50 p-3">
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
               <ShieldCheck size={14} />
+              Safety Validation
+            </div>
+            <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+              <div>Branch safe: {validation.branch_safe ? "yes" : "check"}</div>
+              <div>MR required: {validation.merge_request_required ? "yes" : "check"}</div>
+              <div>Evidence: {validation.evidence_count ?? 0} item(s)</div>
+              <div>Diffs: {validation.diff_preview_available ? "available" : "missing"}</div>
+            </div>
+            {validation.unsafe_paths?.length ? <p className="mt-2 text-sm text-red-700">Unsafe paths: {validation.unsafe_paths.join(", ")}</p> : null}
+          </div>
+
+          {diffs.length ? (
+            <div className="border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-semibold uppercase text-slate-500">Diff Preview</div>
+              <div className="mt-2 space-y-2">
+                {diffs.map((item) => (
+                  <div key={item.path} className="border border-slate-200 bg-white p-3">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Badge label={item.commit_action} />
+                      <span className="text-sm font-semibold text-slate-950">{item.path}</span>
+                    </div>
+                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap border border-slate-200 bg-slate-950 p-2 text-xs leading-5 text-slate-100">
+                      {item.diff || "No textual diff available."}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="border border-slate-200 bg-slate-50 p-3">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+              <ShieldCheck size={14} />
               Safety Checklist
             </div>
             <ul className="space-y-2 text-sm text-slate-700">
@@ -80,6 +118,43 @@ function PlanCard({ plan }: { plan: FixPlan }) {
               ))}
             </ul>
           </div>
+
+          {testCommands.length ? (
+            <div className="border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-semibold uppercase text-slate-500">Validation Commands</div>
+              <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                {testCommands.map((command) => (
+                  <li key={command}>- {command}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-slate-500">{plan.plan_payload.test_plan?.execution_note}</p>
+            </div>
+          ) : null}
+
+          {evidence.length ? (
+            <div className="border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-semibold uppercase text-slate-500">Evidence Bundle</div>
+              <div className="mt-2 space-y-2">
+                {evidence.slice(0, 6).map((item, index) => (
+                  <div key={`${item.type}-${item.id ?? item.file_path ?? index}`} className="border border-slate-200 bg-white p-3 text-sm">
+                    <div className="font-semibold text-slate-950">{item.label}</div>
+                    <p className="mt-1 text-slate-600">{item.summary}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {rollback.length ? (
+            <div className="border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-semibold uppercase text-slate-500">Rollback</div>
+              <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                {rollback.map((item) => (
+                  <li key={item}>- {item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           {suggestions.length ? (
             <div className="border border-slate-200 bg-slate-50 p-3">

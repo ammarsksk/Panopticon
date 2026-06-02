@@ -1,0 +1,38 @@
+{
+  "name": "panopticon-agent-tools",
+  "version": "0.1.0",
+  "transport": "mcp-json-rpc",
+  "endpoint_env": "PANOPTICON_API_BASE_URL",
+  "auth": {
+    "type": "bearer",
+    "token_env": "PANOPTICON_AGENT_TOKEN",
+    "workspace_scoped": true
+  },
+  "tracing": {
+    "trace_header": "X-Panopticon-Agent-Trace-Id",
+    "runtime_header": "X-Panopticon-Agent-Runtime"
+  },
+  "tools": [
+    "search_projects",
+    "get_project_summary",
+    "get_pipeline_context",
+    "get_risk_context",
+    "get_action_context",
+    "get_chat_context",
+    "get_priority_context",
+    "search_repo_context",
+    "generate_grounded_recommendation",
+    "prepare_actions",
+    "create_fix_plan",
+    "get_fix_plans",
+    "get_observability_context",
+    "ingest_observability_event",
+    "get_metrics_context",
+    "refresh_metric_snapshots"
+  ],
+  "safety": {
+    "external_writes": "approval-gated in FastAPI backend",
+    "database_writes": "workspace-scoped in FastAPI backend",
+    "code_changes": "fix plans only until explicitly approved"
+  }
+}

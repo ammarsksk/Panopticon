@@ -169,6 +169,42 @@ class ProjectSyncRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class RepoIndexRun(Base):
+    __tablename__ = "repo_index_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("gitlab_projects.id"), nullable=True, index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    ref: Mapped[str] = mapped_column(String(255), default="")
+    status: Mapped[str] = mapped_column(String(40), default="running", index=True)
+    files_seen: Mapped[int] = mapped_column(Integer, default=0)
+    files_indexed: Mapped[int] = mapped_column(Integer, default=0)
+    files_skipped: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RepoFileIndex(Base):
+    __tablename__ = "repo_file_indexes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("gitlab_projects.id"), nullable=True, index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    file_path: Mapped[str] = mapped_column(String(600), index=True)
+    ref: Mapped[str] = mapped_column(String(255), default="", index=True)
+    file_type: Mapped[str] = mapped_column(String(80), default="source", index=True)
+    language: Mapped[str] = mapped_column(String(80), default="", index=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    content_sha: Mapped[str] = mapped_column(String(160), default="", index=True)
+    last_commit_id: Mapped[str] = mapped_column(String(160), default="")
+    content_excerpt: Mapped[str] = mapped_column(Text, default="")
+    signals: Mapped[dict] = mapped_column(JSON, default=dict)
+    indexed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
 class MergeRequestSnapshot(Base):
     __tablename__ = "merge_request_snapshots"
 
