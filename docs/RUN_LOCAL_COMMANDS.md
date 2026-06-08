@@ -112,3 +112,26 @@ python -m app.scripts.seed_showcase
 ```
 
 This command creates local database records only. Those projects do not appear on GitLab.
+
+## 7. Chat Evaluation Suite
+
+Run this before changing chatbot behavior. It resets local showcase data, runs the seed evaluation cases, and writes the weak-point report.
+
+```powershell
+cd C:\Users\LENOVO\Downloads\Panopticon\backend
+python -m app.scripts.run_chat_eval --seed-showcase
+```
+
+Reports:
+
+```text
+C:\Users\LENOVO\Downloads\Panopticon\artifacts\chat_eval\latest.md
+C:\Users\LENOVO\Downloads\Panopticon\artifacts\chat_eval\latest.json
+```
+
+To test live Gemini answers instead of deterministic draft mode:
+
+```powershell
+cd C:\Users\LENOVO\Downloads\Panopticon\backend
+python -m app.scripts.run_chat_eval --seed-showcase --live-gemini
+```

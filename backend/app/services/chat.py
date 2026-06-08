@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -44,6 +45,7 @@ class ChatService:
             prepared_actions=prepared_actions,
             deterministic_answer=deterministic_answer,
         )
+        answer = _redact_secret_text(answer)
         assistant_message = self._add_message(
             thread,
             role="assistant",
@@ -254,11 +256,11 @@ class ChatService:
         parts = [f"Pipeline analysis for {subject}:"]
         if insights:
             insight = insights[0]
-            parts.append(f"- Likely cause: {insight.likely_cause}")
+            parts.append(f"- Likely cause: {_redact_secret_text(insight.likely_cause)}")
             if insight.evidence:
-                parts.append(f"- Evidence: {'; '.join(insight.evidence[:3])}")
+                parts.append(f"- Evidence: {'; '.join(_redact_secret_text(item) for item in insight.evidence[:3])}")
             if insight.recommendations:
-                parts.append(f"- Next action: {insight.recommendations[0]}")
+                parts.append(f"- Next action: {_redact_secret_text(insight.recommendations[0])}")
         elif failed_jobs:
             job = failed_jobs[0]
             parts.append(f"- The most recent failed job is {job.name} in stage {job.stage}. GitLab reported {job.failure_reason or job.status}.")
@@ -394,9 +396,9 @@ class ChatService:
         confidence = int(float(bundle.get("confidence") or 0) * 100)
         recommendation = str(bundle.get("recommendation") or "").strip()
         next_actions = bundle.get("next_actions") or []
-        parts.append(f"- Grounded recommendation ({confidence}% confidence): {recommendation}")
+        parts.append(f"- Grounded recommendation ({confidence}% confidence): {_redact_secret_text(recommendation)}")
         if next_actions:
-            parts.append(f"- Grounded next step: {next_actions[0]}")
+            parts.append(f"- Grounded next step: {_redact_secret_text(next_actions[0])}")
 
     def _citations(self, intent: str, context: dict, prepared_actions: list[models.AgentAction]) -> list[dict]:
         intent_sources = {
@@ -473,8 +475,8 @@ def _citation(kind: str, record) -> dict:
     return {
         "type": kind,
         "id": record.id,
-        "label": str(label)[:160],
-        "summary": str(summary)[:240],
+        "label": _redact_secret_text(str(label))[:160],
+        "summary": _redact_secret_text(str(summary))[:240],
     }
 
 
@@ -540,8 +542,8 @@ def _record_evidence(kind: str, record) -> dict:
                 "status": record.status,
                 "failure_reason": record.failure_reason,
                 "failure_signature": record.failure_signature,
-                "trace_summary": record.trace_summary,
-                "trace_excerpt": record.trace_excerpt[:1200] if record.trace_excerpt else "",
+                "trace_summary": _redact_secret_text(record.trace_summary),
+                "trace_excerpt": _redact_secret_text(record.trace_excerpt[:1200]) if record.trace_excerpt else "",
                 "duration": record.duration,
                 "web_url": record.web_url,
             }
@@ -688,3 +690,12 @@ def _requested_fix_type(message: str) -> str:
     if "rollback" in text or "incident" in text or "runbook" in text:
         return "rollback_runbook"
     return ""
+
+
+def _redact_secret_text(value: str | None) -> str:
+    text = str(value or "")
+    text = re.sub(r"(?i)\b(client_secret|password|api_key|private_key)\s*=\s*[^\s,;]+", "[REDACTED_SECRET]", text)
+    text = re.sub(r"(?i)\b(authorization:\s*bearer)\s+[^\s,;]+", r"\1 [REDACTED_SECRET]", text)
+    text = re.sub(r"(?i)\b(xox[baprs]-|glpat-)[A-Za-z0-9_\-]+", "[REDACTED_SECRET]", text)
+    text = re.sub(r"-----BEGIN [^-]+-----.*?-----END [^-]+-----", "[REDACTED_SECRET]", text, flags=re.DOTALL)
+    return text

@@ -701,6 +701,25 @@ Acceptance:
 - Report shows weak categories.
 - No UI rewrite starts until we know current failure modes.
 
+### Sprint A Implementation Artifacts
+
+Implemented phase 1-3 foundations:
+
+```text
+backend/app/services/chat_eval.py
+backend/app/scripts/run_chat_eval.py
+backend/tests/test_chat_eval_runner.py
+backend/tests/test_security_auth_boundaries.py
+backend/tests/test_integration_status.py
+backend/tests/test_production_readiness.py
+docs/chat_eval_cases/seed.jsonl
+docs/PRODUCTION_FUNCTIONALITY_AUDIT.md
+artifacts/chat_eval/latest.md
+artifacts/chat_eval/latest.json
+```
+
+The seed file expands to 110 deterministic cases across pipeline, risk, incident, actions, fix-plan, memory, security, missing-evidence, onboarding, and multi-project questions. The runner reports pass rate by category, pass/fail by check, top weak points, latency, and individual failed answers.
+
 Then:
 
 ```text
@@ -712,4 +731,3 @@ Then:
 ```text
 Sprint C: Memory + code-change agent quality
 ```
-
