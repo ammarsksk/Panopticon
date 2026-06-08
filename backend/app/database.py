@@ -14,7 +14,16 @@ def _engine_args(database_url: str) -> dict:
     if database_url.startswith("sqlite"):
         return {"connect_args": {"check_same_thread": False}}
     settings = get_settings()
-    return {"pool_size": settings.db_pool_size, "max_overflow": settings.db_max_overflow, "pool_pre_ping": True}
+    connect_args = {}
+    if database_url.startswith("postgresql"):
+        connect_args["connect_timeout"] = settings.db_connect_timeout
+    return {
+        "pool_size": settings.db_pool_size,
+        "max_overflow": settings.db_max_overflow,
+        "pool_timeout": settings.db_pool_timeout,
+        "pool_pre_ping": True,
+        "connect_args": connect_args,
+    }
 
 
 settings = get_settings()

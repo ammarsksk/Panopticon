@@ -37,6 +37,8 @@ pnpm-debug.log*
 
 # Local environment and secrets
 .env*
+cloud-sql.env
+infrastructure/cloud-sql.env
 !.env.example
 !.env.*.example
 !backend/.env.example

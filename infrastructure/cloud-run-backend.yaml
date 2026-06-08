@@ -8,6 +8,7 @@ spec:
       annotations:
         autoscaling.knative.dev/minScale: "0"
         autoscaling.knative.dev/maxScale: "5"
+        run.googleapis.com/cloudsql-instances: panopticon-495816:us-central1:panopticon-postgres
     spec:
       serviceAccountName: panopticon-runtime@panopticon-495816.iam.gserviceaccount.com
       containers:
@@ -16,6 +17,16 @@ spec:
             - containerPort: 8000
           env:
             - name: APP_ENV
+              value: production
+            - name: APP_API_URL
+              value: https://YOUR_BACKEND_DOMAIN
+            - name: APP_PUBLIC_URL
+              value: https://YOUR_FRONTEND_DOMAIN
+            - name: ALLOWED_ORIGINS
+              value: https://YOUR_FRONTEND_DOMAIN
+            - name: AUTH_REQUIRED
+              value: "true"
+            - name: DEFAULT_WORKSPACE_SLUG
               value: production
             - name: GOOGLE_GENAI_USE_VERTEXAI
               value: "true"
@@ -26,9 +37,80 @@ spec:
             - name: GEMINI_ENABLED
               value: "true"
             - name: GEMINI_MODEL
-              value: gemini-2.5-flash
+              value: gemini-2.5-pro
             - name: DRY_RUN_ACTIONS
               value: "true"
             - name: DISPATCH_ACTIONS
               value: "true"
-
+            - name: REPO_INDEX_ON_SYNC
+              value: "true"
+            - name: REPO_INDEX_FILE_LIMIT
+              value: "120"
+            - name: DB_POOL_SIZE
+              value: "5"
+            - name: DB_MAX_OVERFLOW
+              value: "10"
+            - name: DB_POOL_TIMEOUT
+              value: "30"
+            - name: DB_CONNECT_TIMEOUT
+              value: "10"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-database-url
+                  key: latest
+            - name: GITLAB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-gitlab-webhook-secret
+                  key: latest
+            - name: GITLAB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-gitlab-token
+                  key: latest
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-google-oauth-client-id
+                  key: latest
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-google-oauth-client-secret
+                  key: latest
+            - name: GITLAB_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-gitlab-oauth-client-id
+                  key: latest
+            - name: GITLAB_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-gitlab-oauth-client-secret
+                  key: latest
+            - name: SLACK_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-slack-signing-secret
+                  key: latest
+            - name: SLACK_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-slack-oauth-client-id
+                  key: latest
+            - name: SLACK_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-slack-oauth-client-secret
+                  key: latest
+            - name: OAUTH_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-oauth-token-encryption-key
+                  key: latest
+            - name: AGENT_RUNTIME_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: panopticon-agent-runtime-token
+                  key: latest

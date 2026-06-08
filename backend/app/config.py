@@ -37,6 +37,8 @@ class Settings:
     allowed_origins: list[str] | None = None
     db_pool_size: int = 5
     db_max_overflow: int = 10
+    db_pool_timeout: int = 30
+    db_connect_timeout: int = 10
     auth_required: bool = False
     session_cookie_name: str = "panopticon_session"
     session_ttl_hours: int = 168
@@ -47,6 +49,11 @@ class Settings:
     gitlab_webhook_secret: str = ""
     gitlab_base_url: str = "https://gitlab.com"
     gitlab_token: str = ""
+    gitlab_showcase_project_prefix: str = "panopticon-showcase"
+    gitlab_showcase_namespace_id: str = ""
+    gitlab_showcase_namespace_path: str = ""
+    gitlab_showcase_visibility: str = "private"
+    gitlab_showcase_pipeline_wait_seconds: int = 180
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     google_oauth_redirect_uri: str = ""
@@ -141,6 +148,8 @@ def get_settings() -> Settings:
         allowed_origins=_csv_env("ALLOWED_ORIGINS", ["http://localhost:3000", "http://127.0.0.1:3000"]),
         db_pool_size=_int_env("DB_POOL_SIZE", 5),
         db_max_overflow=_int_env("DB_MAX_OVERFLOW", 10),
+        db_pool_timeout=_int_env("DB_POOL_TIMEOUT", 30),
+        db_connect_timeout=_int_env("DB_CONNECT_TIMEOUT", 10),
         auth_required=_bool_env("AUTH_REQUIRED", False),
         session_cookie_name=os.getenv("SESSION_COOKIE_NAME", "panopticon_session"),
         session_ttl_hours=_int_env("SESSION_TTL_HOURS", 168),
@@ -151,6 +160,11 @@ def get_settings() -> Settings:
         gitlab_webhook_secret=os.getenv("GITLAB_WEBHOOK_SECRET", ""),
         gitlab_base_url=os.getenv("GITLAB_BASE_URL", "https://gitlab.com"),
         gitlab_token=os.getenv("GITLAB_TOKEN", ""),
+        gitlab_showcase_project_prefix=os.getenv("GITLAB_SHOWCASE_PROJECT_PREFIX", "panopticon-showcase"),
+        gitlab_showcase_namespace_id=os.getenv("GITLAB_SHOWCASE_NAMESPACE_ID", ""),
+        gitlab_showcase_namespace_path=os.getenv("GITLAB_SHOWCASE_NAMESPACE_PATH", ""),
+        gitlab_showcase_visibility=os.getenv("GITLAB_SHOWCASE_VISIBILITY", "private"),
+        gitlab_showcase_pipeline_wait_seconds=_int_env("GITLAB_SHOWCASE_PIPELINE_WAIT_SECONDS", 180),
         google_oauth_client_id=os.getenv("GOOGLE_OAUTH_CLIENT_ID", ""),
         google_oauth_client_secret=os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", ""),
         google_oauth_redirect_uri=os.getenv("GOOGLE_OAUTH_REDIRECT_URI", ""),

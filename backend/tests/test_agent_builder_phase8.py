@@ -180,7 +180,8 @@ def test_agent_builder_runtime_queries_grounded_panopticon_tools(monkeypatch):
 
 
 def test_agent_tool_manifest_documents_workspace_scoped_mcp_contract():
-    manifest = json.loads(Path("panopticon_agent/tool_manifest.json").read_text())
+    manifest_path = Path(__file__).resolve().parents[2] / "panopticon_agent" / "tool_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
 
     assert manifest["transport"] == "mcp-json-rpc"
     assert manifest["auth"]["type"] == "bearer"

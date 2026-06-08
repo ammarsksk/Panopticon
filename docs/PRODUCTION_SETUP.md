@@ -110,10 +110,20 @@ gcloud.cmd projects add-iam-policy-binding panopticon-495816 --member="serviceAc
 
 ## Cloud SQL PostgreSQL
 
+The production database migration flow is now maintained in:
+
+```text
+docs/CLOUD_SQL_MIGRATION.md
+```
+
+Use that document first. It creates Cloud SQL, configures Secret Manager, runs Alembic, and verifies the active database.
+
+Manual commands are kept here for reference only.
+
 Create an instance:
 
 ```powershell
-gcloud.cmd sql instances create panopticon-postgres --database-version=POSTGRES_16 --region=us-central1 --tier=db-f1-micro --project panopticon-495816
+gcloud.cmd sql instances create panopticon-postgres --database-version=POSTGRES_16 --region=us-central1 --tier=db-custom-1-3840 --availability-type=REGIONAL --storage-size=20 --storage-type=SSD --enable-point-in-time-recovery --backup-start-time=03:00 --project panopticon-495816
 ```
 
 Create DB and user:
@@ -138,6 +148,26 @@ Create secrets:
 "GITLAB_TOKEN_VALUE" | gcloud.cmd secrets create panopticon-gitlab-token --data-file=- --project panopticon-495816
 "GITLAB_WEBHOOK_SECRET_VALUE" | gcloud.cmd secrets create panopticon-gitlab-webhook-secret --data-file=- --project panopticon-495816
 "SLACK_WEBHOOK_URL_VALUE" | gcloud.cmd secrets create panopticon-slack-webhook-url --data-file=- --project panopticon-495816
+```
+
+For the current production manifest, also create these secrets:
+
+```text
+panopticon-google-oauth-client-id
+panopticon-google-oauth-client-secret
+panopticon-gitlab-oauth-client-id
+panopticon-gitlab-oauth-client-secret
+panopticon-slack-signing-secret
+panopticon-slack-oauth-client-id
+panopticon-slack-oauth-client-secret
+panopticon-oauth-token-encryption-key
+panopticon-agent-runtime-token
+```
+
+The recommended way is to fill `infrastructure\cloud-sql.env` and run:
+
+```powershell
+.\scripts\gcp_setup_cloud_sql.ps1
 ```
 
 ## Build Images

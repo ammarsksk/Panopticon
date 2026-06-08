@@ -74,6 +74,63 @@ class GitLabClient:
                 return response.json()
             return response.text
 
+    def get_project(self, project_path: str) -> dict:
+        result = self._request("GET", f"/projects/{self._project_id(project_path)}")
+        return result if isinstance(result, dict) else {}
+
+    def current_user(self) -> dict:
+        result = self._request("GET", "/user")
+        return result if isinstance(result, dict) else {}
+
+    def create_project(self, *, name: str, path: str, description: str = "", visibility: str = "private", namespace_id: str = "") -> dict:
+        payload: dict[str, str | bool | int] = {
+            "name": name,
+            "path": path,
+            "description": description,
+            "visibility": visibility,
+            "initialize_with_readme": "true",
+            "default_branch": "main",
+            "shared_runners_enabled": True,
+        }
+        if namespace_id:
+            payload["namespace_id"] = int(namespace_id)
+        result = self._request("POST", "/projects", json=payload)
+        return result if isinstance(result, dict) else {}
+
+    def update_project(self, project_path: str, payload: dict) -> dict:
+        result = self._request("PUT", f"/projects/{self._project_id(project_path)}", json=payload)
+        return result if isinstance(result, dict) else {}
+
+    def create_commit_live(self, project_path: str, branch_name: str, commit_message: str, actions: list[dict], *, start_branch: str = "") -> dict:
+        payload: dict[str, str | list[dict]] = {"branch": branch_name, "commit_message": commit_message, "actions": actions}
+        if start_branch:
+            payload["start_branch"] = start_branch
+        result = self._request(
+            "POST",
+            f"/projects/{self._project_id(project_path)}/repository/commits",
+            json=payload,
+        )
+        return result if isinstance(result, dict) else {}
+
+    def create_merge_request_live(self, project_path: str, source_branch: str, target_branch: str, title: str, description: str) -> dict:
+        result = self._request(
+            "POST",
+            f"/projects/{self._project_id(project_path)}/merge_requests",
+            json={
+                "source_branch": source_branch,
+                "target_branch": target_branch,
+                "title": title,
+                "description": description,
+                "remove_source_branch": False,
+                "squash": False,
+            },
+        )
+        return result if isinstance(result, dict) else {}
+
+    def create_pipeline_live(self, project_path: str, ref: str) -> dict:
+        result = self._request("POST", f"/projects/{self._project_id(project_path)}/pipeline", json={"ref": ref})
+        return result if isinstance(result, dict) else {}
+
     def get_merge_request(self, project_path: str, merge_request_iid: str) -> dict:
         result = self._request("GET", f"/projects/{self._project_id(project_path)}/merge_requests/{merge_request_iid}")
         return result if isinstance(result, dict) else {}
@@ -88,6 +145,10 @@ class GitLabClient:
     def get_pipeline_jobs(self, project_path: str, pipeline_id: str) -> list[dict]:
         result = self._request("GET", f"/projects/{self._project_id(project_path)}/pipelines/{pipeline_id}/jobs")
         return result if isinstance(result, list) else []
+
+    def get_branch(self, project_path: str, branch_name: str) -> dict:
+        result = self._request("GET", f"/projects/{self._project_id(project_path)}/repository/branches/{quote(branch_name, safe='')}")
+        return result if isinstance(result, dict) else {}
 
     def get_job_trace(self, project_path: str, job_id: str) -> str:
         result = self._request("GET", f"/projects/{self._project_id(project_path)}/jobs/{job_id}/trace")
@@ -130,6 +191,10 @@ class GitLabClient:
         }
         result = self._request("GET", f"/projects/{self._project_id(project_path)}/pipelines", params=params)
         return result if isinstance(result, list) else []
+
+    def get_pipeline(self, project_path: str, pipeline_id: str) -> dict:
+        result = self._request("GET", f"/projects/{self._project_id(project_path)}/pipelines/{pipeline_id}")
+        return result if isinstance(result, dict) else {}
 
     def list_repository_tree(self, project_path: str, ref: str, *, recursive: bool = True, limit: int = 100) -> list[dict]:
         params = {
