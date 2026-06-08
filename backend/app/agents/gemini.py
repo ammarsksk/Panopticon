@@ -148,8 +148,9 @@ class GeminiReasoner:
                     prompt,
                     (
                         "Write a complete operational answer in plain text. "
-                        "Use 3 to 6 short complete sentences. "
-                        "Do not use Markdown tables. "
+                        "Use the user's requested format when it is clear. "
+                        "Markdown tables are allowed only when the user explicitly asks for a table or the deterministic draft is already a table. "
+                        "Otherwise use 3 to 6 short complete sentences or compact bullets. "
                         "Do not end with an unfinished phrase, conjunction, or preposition. "
                         "End the final sentence with a period."
                     ),
@@ -179,7 +180,7 @@ class GeminiReasoner:
                 "Do not invent GitLab, Slack, incident, or pipeline facts.",
                 "Be specific, concise, and operational. Prefer concrete next steps over generic advice.",
                 "When an action is proposed, remind the user it still needs approval before execution.",
-                "Return plain text only. Do not use Markdown tables.",
+                "Use Markdown tables or checklists only if the user asks for that format.",
             ]
         )
 

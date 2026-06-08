@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.agents.gemini import GeminiReasoner
+from app.services.agent_memory import AgentMemoryService
 from app.services.agent_tools import AgentToolService
+from app.services.chat_validation import ChatValidationService
 from app.services.fix_plans import FixPlanService
 from app.services.grounded_recommendations import GroundedRecommendationEngine
 
@@ -23,7 +25,10 @@ class ChatService:
         user_message = self._add_message(thread, role="user", content=message)
 
         intent = _classify_intent(message)
+        memory_service = AgentMemoryService(self.db, workspace_id=self.workspace_id)
+        captured_memory = memory_service.capture_user_memory(message=message, project=project)
         context = self._context(project)
+        context["memory"] = memory_service.retrieve(project=project, question=message, current_memory=context.get("memory", []))
         context["grounded_recommendation"] = GroundedRecommendationEngine(self.db, workspace_id=self.workspace_id).recommend(
             project=project,
             question=message,
@@ -33,6 +38,10 @@ class ChatService:
         )
         prepared_actions = self._prepare_actions_if_requested(message, project)
         prepared_fix_plans = self._prepare_fix_plans_if_requested(message, project, context)
+        for plan in prepared_fix_plans:
+            memory_service.remember_prepared_fix_plan(plan)
+        if prepared_fix_plans:
+            context["memory"] = memory_service.retrieve(project=project, question=message, current_memory=context.get("memory", []))
         citations = self._citations(intent, context, prepared_actions)
         deterministic_answer = self._compose_answer(intent, message, project, context, prepared_actions)
         deterministic_answer = self._append_prepared_fix_plan_text(deterministic_answer, prepared_fix_plans)
@@ -45,7 +54,24 @@ class ChatService:
             prepared_actions=prepared_actions,
             deterministic_answer=deterministic_answer,
         )
-        answer = _redact_secret_text(answer)
+        validation = ChatValidationService().validate(
+            answer=answer,
+            deterministic_answer=deterministic_answer,
+            intent=intent,
+            context=context,
+            citations=citations,
+            prepared_actions=prepared_actions,
+            prepared_fix_plans=prepared_fix_plans,
+        )
+        answer = _redact_secret_text(validation.answer)
+        if captured_memory:
+            answer = f"{answer}\n\nSaved memory: {captured_memory[0].summary}"
+        memory_service.remember_answer_pattern(
+            project_path=project.project_path if project else "",
+            intent=intent,
+            answer=answer,
+            evidence_labels=[f"{citation.get('type')}:{citation.get('label')}" for citation in citations],
+        )
         assistant_message = self._add_message(
             thread,
             role="assistant",
@@ -121,7 +147,26 @@ class ChatService:
 
     def _prepare_actions_if_requested(self, message: str, project: models.GitLabProject | None) -> list[models.AgentAction]:
         lowered = message.lower()
-        if not any(word in lowered for word in ["prepare", "propose", "create action", "draft action", "make action"]):
+        action_requested = any(
+            phrase in lowered
+            for phrase in [
+                "prepare",
+                "propose",
+                "create action",
+                "draft action",
+                "make action",
+                "approve",
+                "execute",
+                "send",
+                "make the action",
+                "action live",
+                "live without approval",
+                "without approval",
+                "slack alert",
+                "gitlab comment",
+            ]
+        )
+        if not action_requested:
             return []
 
         return self.tools.prepare_action_records(project=project, limit=10)
@@ -141,9 +186,12 @@ class ChatService:
                 "patch",
                 "create branch",
                 "open mr",
+                "mr plan",
+                "branch plan",
                 "merge request fix",
             ]
         )
+        wants_fix = wants_fix or ("fix" in lowered and any(term in lowered for term in ["plan", "patch", "branch", "mr", "merge request", "code"]))
         if not wants_fix or not project:
             return []
 
@@ -173,6 +221,20 @@ class ChatService:
 
     def _compose_answer(self, intent: str, question: str, project: models.GitLabProject | None, context: dict, prepared_actions: list[models.AgentAction]) -> str:
         subject = project.project_path if project else "all synced projects"
+        response_format = _response_format(question)
+        if _is_product_usage_question(question):
+            return _product_usage_answer()
+        if _asks_for_secret(question):
+            return (
+                f"For {subject}, I cannot reveal secrets, credentials, tokens, or raw secret-like job log values. "
+                "I can still summarize the failure using redacted evidence and approval-gated next steps."
+            )
+        if response_format == "table":
+            return _table_answer(subject=subject, intent=intent, context=context, prepared_actions=prepared_actions)
+        if response_format == "checklist":
+            return _checklist_answer(subject=subject, intent=intent, context=context, prepared_actions=prepared_actions)
+        if response_format == "concise":
+            return _concise_answer(subject=subject, intent=intent, context=context, prepared_actions=prepared_actions)
         if intent == "pipeline_failure":
             return self._pipeline_answer(subject, context, prepared_actions)
         if intent == "priority":
@@ -251,12 +313,23 @@ class ChatService:
 
     def _pipeline_answer(self, subject: str, context: dict, prepared_actions: list[models.AgentAction]) -> str:
         pipelines = context["pipelines"]
-        insights = context["pipeline_insights"]
+        insights = [item for item in context["pipeline_insights"] if item.status == "failed"]
         failed_jobs = context["failed_jobs"]
         parts = [f"Pipeline analysis for {subject}:"]
+        if not insights and not failed_jobs and not any(pipeline.status == "failed" for pipeline in pipelines):
+            if pipelines:
+                latest = pipelines[0]
+                parts.append(f"- Latest synced pipeline #{latest.pipeline_id} is {latest.status} on ref {latest.ref or 'unknown'}.")
+            parts.append("- Cannot determine a failed job or root cause because no failed pipeline, failed job trace, or failed pipeline insight is stored for this scope.")
+            parts.append("- Next action: sync the latest GitLab pipeline jobs and failed job traces before naming a root cause or preparing a live action.")
+            self._append_prepared(parts, prepared_actions)
+            return "\n".join(parts)
         if insights:
             insight = insights[0]
             parts.append(f"- Likely cause: {_redact_secret_text(insight.likely_cause)}")
+            if failed_jobs:
+                job = failed_jobs[0]
+                parts.append(f"- Failed job: {job.name} in stage {job.stage}, pipeline #{job.pipeline_id}.")
             if insight.evidence:
                 parts.append(f"- Evidence: {'; '.join(_redact_secret_text(item) for item in insight.evidence[:3])}")
             if insight.recommendations:
@@ -380,6 +453,8 @@ class ChatService:
             parts.append(f"- {record.memory_type}: {record.summary}")
             if record.remediation:
                 parts.append(f"  Next remediation: {record.remediation[0]}")
+        if memory:
+            parts.append("- Owner review is still required before approving Slack, GitLab, or code-change actions based on this memory.")
         self._append_grounded(parts, context)
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
@@ -517,9 +592,9 @@ def _record_evidence(kind: str, record) -> dict:
             {
                 "pipeline_id": record.pipeline_id,
                 "status": record.status,
-                "likely_cause": record.likely_cause,
-                "evidence": record.evidence,
-                "recommendations": record.recommendations,
+                "likely_cause": _redact_secret_text(record.likely_cause),
+                "evidence": [_redact_secret_text(item) for item in record.evidence],
+                "recommendations": [_redact_secret_text(item) for item in record.recommendations],
             }
         )
     elif isinstance(record, models.PipelineSnapshot):
@@ -641,26 +716,226 @@ def _now():
 
 def _classify_intent(message: str) -> str:
     text = message.lower()
-    has_priority_word = any(term in text for term in ["which", "first", "worst", "highest", "top", "prioritize", "priority", "look at"])
-    has_risk_word = any(term in text for term in ["risk", "risky", "danger", "safe", "unsafe", "deployment"])
-    has_failure_word = any(term in text for term in ["pipeline", "ci", "job", "build", "test failed", "timeout", "fail", "failure"])
-    if has_priority_word and (has_risk_word or has_failure_word):
-        return "priority"
-    if has_risk_word and has_failure_word:
+    if _is_product_usage_question(message):
+        return "summary"
+    if _asks_for_secret(message):
+        return "summary"
+
+    has_action_word = _has_phrase(text, ["action", "actions", "approve", "approval", "execute", "prepare", "propose", "send", "slack alert", "gitlab comment"])
+    has_memory_word = _has_phrase(text, ["memory", "remember", "history", "recurring", "previous", "happened before", "before"])
+    has_incident_word = _has_phrase(text, ["incident", "incidents", "outage", "rollback"])
+    has_fix_plan_word = _has_phrase(text, ["fix plan", "safe fix", "prepare fix", "create fix", "patch", "generate patch", "code change", "create branch", "mr plan", "branch plan"])
+    has_merge_request_word = _has_phrase(text, ["merge request", "mr ", "review", "branch"])
+    has_failure_word = _has_phrase(text, ["pipeline", "pipelines", "ci", "job", "jobs", "build", "test failed", "timeout", "fail", "failed", "failure", "failures", "broke", "broken", "went wrong", "what to do next"])
+    has_risk_word = _has_phrase(text, ["risk", "risks", "risky", "danger", "safe", "unsafe", "deployment", "deploy", "release"])
+    has_priority_word = _has_phrase(text, ["first", "worst", "highest", "top", "prioritize", "priority", "look at first", "start debugging"])
+
+    if has_memory_word:
+        return "memory"
+    if has_fix_plan_word:
+        return "pipeline_failure"
+    if has_action_word:
+        return "actions"
+    if has_incident_word:
+        return "incident"
+    if has_priority_word and (has_risk_word or has_failure_word or "issue" in text or "problem" in text or "debugging" in text):
         return "priority"
     if has_failure_word:
         return "pipeline_failure"
     if has_risk_word:
         return "risk"
-    if any(term in text for term in ["merge request", "mr ", "review", "branch"]):
+    if has_merge_request_word:
         return "merge_request"
-    if any(term in text for term in ["incident", "rollback", "outage", "root cause"]):
-        return "incident"
-    if any(term in text for term in ["action", "approve", "approval", "execute", "prepare", "propose"]):
-        return "actions"
-    if any(term in text for term in ["memory", "remember", "history", "recurring", "previous"]):
-        return "memory"
     return "summary"
+
+
+def _has_phrase(text: str, phrases: list[str]) -> bool:
+    for phrase in phrases:
+        if " " in phrase:
+            if phrase in text:
+                return True
+            continue
+        if re.search(rf"(?<![a-z0-9_]){re.escape(phrase)}(?![a-z0-9_])", text):
+            return True
+    return False
+
+
+def _asks_for_secret(message: str) -> bool:
+    text = message.lower()
+    return _has_phrase(
+        text,
+        [
+            "secret",
+            "secrets",
+            "credential",
+            "credentials",
+            "token",
+            "tokens",
+            "api key",
+            "api keys",
+            "client_secret",
+            "password",
+            "private key",
+        ],
+    ) and any(term in text for term in ["print", "reveal", "show", "extract", "tell me", "raw"])
+
+
+def _is_product_usage_question(message: str) -> bool:
+    text = message.lower().strip()
+    return any(
+        phrase in text
+        for phrase in [
+            "how should i use panopticon",
+            "what can i ask",
+            "what does panopticon know",
+            "how do i review actions safely",
+            "how does this app help",
+            "how do i use",
+        ]
+    )
+
+
+def _product_usage_answer() -> str:
+    return (
+        "Panopticon helps you connect GitLab projects, sync pipelines and merge requests, inspect risks, ask the agent grounded questions, "
+        "prepare approval-gated Slack or GitLab actions, and review safe fix plans before anything writes back. "
+        "Start by checking synced projects, then ask about a specific failed pipeline, risky merge request, incident, or action you want to review."
+    )
+
+
+def _response_format(message: str) -> str:
+    text = message.lower()
+    if any(term in text for term in ["table", "tabular", "matrix", "columns", "compare in columns", "make a table"]):
+        return "table"
+    if any(term in text for term in ["checklist", "todo", "to-do", "step by step", "steps", "what should i do next"]):
+        return "checklist"
+    if any(term in text for term in ["tl;dr", "tldr", "brief", "short answer", "summarize briefly", "concise"]):
+        return "concise"
+    return "default"
+
+
+def _table_answer(*, subject: str, intent: str, context: dict, prepared_actions: list[models.AgentAction]) -> str:
+    rows: list[list[str]] = []
+    for insight in context.get("pipeline_insights", [])[:3]:
+        if insight.status != "failed" and intent == "pipeline_failure":
+            continue
+        rows.append(
+            [
+                "Pipeline",
+                f"#{insight.pipeline_id} {insight.status}",
+                _redact_secret_text(insight.likely_cause),
+                _safe_join(insight.evidence[:2]),
+                _safe_join(insight.recommendations[:1]) or "Inspect the failed job log.",
+                "Approval required before Slack/GitLab action.",
+            ]
+        )
+    for job in context.get("failed_jobs", [])[:3]:
+        rows.append(
+            [
+                "Failed job",
+                f"{job.name} / {job.stage}",
+                _redact_secret_text(job.trace_summary or job.failure_signature or job.failure_reason or job.status),
+                f"Pipeline #{job.pipeline_id}; job #{job.job_id}",
+                "Open the job trace and verify the first failing command.",
+                "No live write from chat.",
+            ]
+        )
+    for risk in context.get("risks", [])[:3]:
+        rows.append(
+            [
+                "Risk",
+                f"{risk.score}/100 {risk.level}",
+                _redact_secret_text(risk.summary),
+                _safe_join(risk.reasons[:2]),
+                _safe_join(risk.recommendations[:1]) or "Require owner review.",
+                "Approval required before GitLab comment.",
+            ]
+        )
+    for incident in context.get("incidents", [])[:2]:
+        rows.append(
+            [
+                "Incident",
+                incident.severity,
+                _redact_secret_text(incident.probable_root_cause),
+                incident.title,
+                _safe_join(incident.recommendations[:1]) or "Review incident timeline.",
+                "Approval required before external action.",
+            ]
+        )
+    for action in (prepared_actions or context.get("actions", []))[:3]:
+        rows.append(
+            [
+                "Action",
+                action.status,
+                _redact_secret_text(action.summary),
+                f"{action.channel} / {action.action_type}",
+                "Review payload, then approve or reject.",
+                "Requires approval." if action.requires_approval else "No approval required.",
+            ]
+        )
+    if not rows:
+        rows.append(["Evidence", "missing", "No matching records are stored.", "No pipeline/job/risk evidence found.", "Sync GitLab and refresh repo context.", "Do not execute actions."])
+
+    lines = [
+        f"Table view for {subject}:",
+        "",
+        "| Area | Status | What went wrong | Evidence | Next step | Safety |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    lines.extend("| " + " | ".join(_md_cell(cell) for cell in row) + " |" for row in rows[:10])
+    lines.append("")
+    lines.append("Review the evidence and approve only actions whose payload matches this table.")
+    return "\n".join(lines)
+
+
+def _checklist_answer(*, subject: str, intent: str, context: dict, prepared_actions: list[models.AgentAction]) -> str:
+    items: list[str] = [f"Checklist for {subject}:"]
+    failed_jobs = context.get("failed_jobs", [])
+    insights = [item for item in context.get("pipeline_insights", []) if item.status == "failed"]
+    risks = context.get("risks", [])
+    incidents = context.get("incidents", [])
+    actions = prepared_actions or context.get("actions", [])
+    if insights:
+        items.append(f"- [ ] Verify pipeline #{insights[0].pipeline_id}: {_redact_secret_text(insights[0].likely_cause)}")
+    if failed_jobs:
+        job = failed_jobs[0]
+        items.append(f"- [ ] Open failed job `{job.name}` in stage `{job.stage}` and inspect the first failing command.")
+    if risks:
+        items.append(f"- [ ] Review deployment risk {risks[0].score}/100 {risks[0].level}: {_redact_secret_text(risks[0].summary)}")
+    if incidents:
+        items.append(f"- [ ] Check incident `{incidents[0].title}` and confirm whether the probable root cause still matches fresh evidence.")
+    if actions:
+        items.append("- [ ] Review prepared action payloads; approve only the action that matches the evidence.")
+    items.append("- [ ] Keep Slack/GitLab writes approval-gated; do not execute live actions from chat alone.")
+    if len(items) == 2:
+        items.insert(1, "- [ ] Sync GitLab projects, pipelines, failed jobs, and repository context before making a diagnosis.")
+    return "\n".join(items)
+
+
+def _concise_answer(*, subject: str, intent: str, context: dict, prepared_actions: list[models.AgentAction]) -> str:
+    insight = next((item for item in context.get("pipeline_insights", []) if item.status == "failed"), None)
+    risk = context.get("risks", [None])[0]
+    incident = context.get("incidents", [None])[0]
+    if intent == "risk" and risk:
+        return f"Short answer for {subject}: the top delivery risk is {risk.score}/100 {risk.level}. {_redact_secret_text(risk.summary)} Next step: {_safe_join(risk.recommendations[:1]) or 'require owner review.'}"
+    if insight:
+        return f"Short answer for {subject}: pipeline #{insight.pipeline_id} failed because {_redact_secret_text(insight.likely_cause)} Next step: {_safe_join(insight.recommendations[:1]) or 'inspect the failed job log.'}"
+    if risk:
+        return f"Short answer for {subject}: the top delivery risk is {risk.score}/100 {risk.level}. {_redact_secret_text(risk.summary)} Next step: {_safe_join(risk.recommendations[:1]) or 'require owner review.'}"
+    if incident:
+        return f"Short answer for {subject}: the active incident is `{incident.title}`. Probable root cause: {_redact_secret_text(incident.probable_root_cause)}."
+    return f"Short answer for {subject}: I do not have enough stored evidence to diagnose this yet. Sync GitLab pipelines, failed jobs, and repository context first."
+
+
+def _md_cell(value: object) -> str:
+    text = _redact_secret_text(str(value or ""))
+    text = re.sub(r"\s+", " ", text).strip()
+    text = text.replace("|", "\\|")
+    return text[:220] or "-"
+
+
+def _safe_join(values: list[object]) -> str:
+    return "; ".join(_redact_secret_text(str(value)) for value in values if str(value or "").strip())
 
 
 def _best_fix_source(context: dict) -> tuple[str, str]:

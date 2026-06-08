@@ -5,7 +5,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import GitLabProject, PipelineInsight, Recommendation, RiskAssessment
+from app.models import GitLabProject, MemoryRecord, PipelineInsight, Recommendation, RiskAssessment
 
 
 def _session():
@@ -120,6 +120,51 @@ def test_mcp_endpoint_lists_and_calls_tools():
     text = called["result"]["content"][0]["text"]
     assert "demo/checkout-service" in text
     assert called["result"]["isError"] is False
+
+
+def test_mcp_memory_tool_returns_relevant_project_memory():
+    db = _session()
+    project = _seed(db)
+    db.add(
+        MemoryRecord(
+            project_path="demo/checkout-service",
+            memory_type="failure_signature_memory",
+            signature="checkout-timeout",
+            summary="Checkout pipeline timeouts usually involve payment gateway latency.",
+            evidence=["pipeline:9001", "job:test"],
+            remediation=["Inspect dependency latency before changing timeout values."],
+        )
+    )
+    db.commit()
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()
+        called = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_memory_context",
+                    "arguments": {"project_id": project.id, "question": "What happened with checkout timeouts?"},
+                },
+            },
+        ).json()
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    tool_names = {tool["name"] for tool in tools["result"]["tools"]}
+    text = called["result"]["content"][0]["text"]
+    assert "get_memory_context" in tool_names
+    assert "payment gateway latency" in text
+    assert "failure_signature_memory" in text
 
 
 def test_mcp_priority_and_chat_context_tools():

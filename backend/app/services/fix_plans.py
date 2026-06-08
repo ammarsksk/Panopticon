@@ -9,6 +9,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.services.agent_memory import AgentMemoryService
 from app.services.grounded_recommendations import GroundedRecommendationEngine
 from app.services.oauth import gitlab_client_for_workspace
 
@@ -119,6 +120,12 @@ class FixPlanService:
         plan.status = "approved"
         plan.updated_at = _now()
         self._record_decision(plan, decision="approved", actor=actor, reason=reason)
+        AgentMemoryService(self.db, workspace_id=self.workspace_id).remember_fix_plan_decision(
+            plan,
+            decision="approved",
+            actor=actor,
+            reason=reason,
+        )
         self.db.commit()
         return plan
 
@@ -129,6 +136,12 @@ class FixPlanService:
         plan.status = "rejected"
         plan.updated_at = _now()
         self._record_decision(plan, decision="rejected", actor=actor, reason=reason)
+        AgentMemoryService(self.db, workspace_id=self.workspace_id).remember_fix_plan_decision(
+            plan,
+            decision="rejected",
+            actor=actor,
+            reason=reason,
+        )
         self.db.commit()
         return plan
 

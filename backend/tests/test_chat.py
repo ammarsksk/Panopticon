@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 from app.agents.gemini import GeminiReasoner
 from app.database import Base, get_db
 from app.main import app
-from app.models import ChatMessage, ChatThread, GitLabProject, MergeRequestSnapshot, PipelineInsight, PipelineSnapshot, Recommendation, RiskAssessment
+from app.models import ChatMessage, ChatThread, GitLabProject, MemoryRecord, MergeRequestSnapshot, PipelineInsight, PipelineSnapshot, Recommendation, RiskAssessment
 from app.scripts.seed_demo import seed_rich_demo
 
 
@@ -385,6 +385,59 @@ def test_chat_can_prepare_actions_without_executing_them(monkeypatch):
     assert actions[0]["status"] == "pending_approval"
 
 
+def test_chat_formats_pipeline_answer_as_table_when_requested(monkeypatch):
+    _use_deterministic_chat(monkeypatch)
+    db = _session()
+    project = _seed_project_context(db)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={"project_id": project.id, "message": "Make a table to understand what went wrong in the pipeline."},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    answer = response.json()["assistant_message"]["content"]
+    assert answer.startswith("Table view for demo/checkout-service")
+    assert "| Area | Status | What went wrong | Evidence | Next step | Safety |" in answer
+    assert "Pipeline" in answer
+    assert "payment gateway" in answer
+
+
+def test_chat_formats_next_steps_as_checklist_when_requested(monkeypatch):
+    _use_deterministic_chat(monkeypatch)
+    db = _session()
+    project = _seed_project_context(db)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={"project_id": project.id, "message": "Give me a checklist of what I should do next for this failure."},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    answer = response.json()["assistant_message"]["content"]
+    assert answer.startswith("Checklist for demo/checkout-service")
+    assert "- [ ]" in answer
+    assert "approval-gated" in answer
+
+
 def test_chat_rejects_unknown_project_id():
     db = _session()
 
@@ -400,3 +453,61 @@ def test_chat_rejects_unknown_project_id():
         db.close()
 
     assert response.status_code == 404
+
+
+def test_chat_captures_user_preference_as_memory(monkeypatch):
+    _use_deterministic_chat(monkeypatch)
+    db = _session()
+    project = _seed_project_context(db)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={"project_id": project.id, "message": "Remember that I prefer table answers for incident summaries."},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    answer = response.json()["assistant_message"]["content"]
+    memory = db.query(MemoryRecord).filter(MemoryRecord.memory_type == "user_preference_memory").one()
+    assert "Saved memory" in answer
+    assert "prefer table answers" in memory.summary
+    assert memory.project_path == "demo/checkout-service"
+
+
+def test_chat_validation_blocks_unsafe_live_action_claim(monkeypatch):
+    db = _session()
+    project = _seed_project_context(db)
+
+    monkeypatch.setattr(
+        GeminiReasoner,
+        "chat_answer",
+        lambda self, *, question, intent, subject, evidence, deterministic_draft: "I posted to Slack and opened a merge request for this project.",
+    )
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={"project_id": project.id, "message": "Prepare and send a Slack alert for this project."},
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    answer = response.json()["assistant_message"]["content"]
+    assert "posted to Slack" not in answer
+    assert "opened a merge request" not in answer
+    assert "require approval" in answer.lower() or "approval" in answer.lower()

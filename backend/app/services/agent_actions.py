@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.actions.dispatcher import ActionDispatcher
+from app.services.agent_memory import AgentMemoryService
 
 
 EXECUTABLE_CHANNELS = {"gitlab_comment", "slack"}
@@ -60,6 +61,12 @@ class AgentActionService:
         action.status = "approved"
         action.updated_at = _now()
         self._record_decision(action, decision="approved", actor=actor, reason=reason)
+        AgentMemoryService(self.db, workspace_id=self.workspace_id).remember_action_decision(
+            action,
+            decision="approved",
+            actor=actor,
+            reason=reason,
+        )
         self.db.commit()
         return action
 
@@ -70,6 +77,12 @@ class AgentActionService:
         action.status = "rejected"
         action.updated_at = _now()
         self._record_decision(action, decision="rejected", actor=actor, reason=reason)
+        AgentMemoryService(self.db, workspace_id=self.workspace_id).remember_action_decision(
+            action,
+            decision="rejected",
+            actor=actor,
+            reason=reason,
+        )
         self.db.commit()
         return action
 

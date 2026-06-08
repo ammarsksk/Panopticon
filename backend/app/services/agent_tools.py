@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.services.agent_actions import AgentActionService
+from app.services.agent_memory import AgentMemoryService
 from app.services.fix_plans import FixPlanService
 from app.services.gitlab_sync import GitLabProjectSyncService
 from app.services.grounded_recommendations import GroundedRecommendationEngine
@@ -59,6 +60,11 @@ class AgentToolService:
                 "get_chat_context",
                 "Fetch the same broad, ranked operational context used by Panopticon chat.",
                 {"project_id": "integer", "project_path": "string", "limit": "integer"},
+            ),
+            _tool(
+                "get_memory_context",
+                "Fetch relevant workspace and project memory for an agent question.",
+                {"project_id": "integer", "project_path": "string", "question": "string", "limit": "integer"},
             ),
             _tool(
                 "get_priority_context",
@@ -167,6 +173,8 @@ class AgentToolService:
             return self.action_context(project=project, limit=limit)
         if name == "get_chat_context":
             return _serialize_context(self.chat_context(project, limit=limit))
+        if name == "get_memory_context":
+            return self.memory_context(project=project, question=str(args.get("question") or ""), limit=limit)
         if name == "get_priority_context":
             return self.priority_context(limit=limit)
         if name == "search_repo_context":
@@ -328,6 +336,18 @@ class AgentToolService:
         return {
             "project": _project(project) if project else None,
             "fix_plans": [_record("fix_plans", item) for item in self._records(models.FixPlan, project_path, desc(models.FixPlan.updated_at), limit)],
+        }
+
+    def memory_context(self, *, project: models.GitLabProject | None, question: str = "", limit: int = 10) -> dict[str, Any]:
+        memory = AgentMemoryService(self.db, workspace_id=self.workspace_id).retrieve(
+            project=project,
+            question=question,
+            current_memory=self._records(models.MemoryRecord, project.project_path if project else None, desc(models.MemoryRecord.created_at), limit),
+            limit=limit,
+        )
+        return {
+            "project": _project(project) if project else None,
+            "memory": [_record("memory", item) for item in memory],
         }
 
     def observability_context(self, *, project: models.GitLabProject | None, limit: int = 10) -> dict[str, Any]:
@@ -511,6 +531,8 @@ def _record(kind: str, record: Any) -> dict[str, Any]:
         "content_sha",
         "last_commit_id",
         "content_excerpt",
+        "memory_type",
+        "signature",
     ]:
         if hasattr(record, field):
             data[field] = getattr(record, field)
