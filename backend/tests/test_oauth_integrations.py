@@ -41,6 +41,29 @@ def test_google_auth_url_creates_bounded_state_record():
         db.close()
 
 
+def test_oauth_state_allows_only_configured_frontend_origins():
+    db = _session()
+    try:
+        service = OAuthService(db)
+        service.settings = replace(
+            service.settings,
+            allowed_origins=["http://localhost:3001"],
+            google_oauth_client_id="google-client",
+            google_oauth_client_secret="google-secret",
+            google_oauth_redirect_uri="http://localhost:8000/api/auth/google/callback",
+        )
+
+        service.google_auth_url(redirect_after="http://localhost:3001/dashboard")
+        allowed_state = db.scalar(select(models.OAuthState).where(models.OAuthState.provider == "google"))
+        assert allowed_state.redirect_after == "http://localhost:3001/dashboard"
+
+        service.google_auth_url(redirect_after="https://attacker.example/dashboard")
+        states = db.scalars(select(models.OAuthState).where(models.OAuthState.provider == "google").order_by(models.OAuthState.id)).all()
+        assert states[-1].redirect_after == "/"
+    finally:
+        db.close()
+
+
 def test_gitlab_workspace_token_builds_bearer_client():
     db = _session()
     try:

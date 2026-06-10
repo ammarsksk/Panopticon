@@ -482,15 +482,20 @@ export class ApiError extends Error {
   path: string;
 
   constructor(path: string, status: number) {
-    super(`Failed to load ${path}`);
+    super(`Failed to load ${path} (${status})`);
     this.name = "ApiError";
     this.status = status;
     this.path = path;
   }
 }
 
+let csrfToken: string | null = null;
+
 export function isUnauthorized(error: unknown) {
-  return error instanceof ApiError && error.status === 401;
+  if (error instanceof ApiError) return error.status === 401;
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { status?: unknown; name?: unknown; message?: unknown };
+  return candidate.status === 401 || (candidate.name === "ApiError" && String(candidate.message || "").includes("Failed to load") && candidate.status === 401);
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -502,7 +507,7 @@ async function get<T>(path: string): Promise<T> {
 }
 
 async function post<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, { method: "POST", cache: "no-store", credentials: "include", headers: await forwardedHeaders() });
+  const response = await fetch(`${API_BASE}${path}`, { method: "POST", cache: "no-store", credentials: "include", headers: { ...(await forwardedHeaders()), ...(await csrfHeaders()) } });
   if (!response.ok) {
     throw new ApiError(path, response.status);
   }
@@ -510,13 +515,14 @@ async function post<T>(path: string): Promise<T> {
 }
 
 async function postJson<T>(path: string, body: Record<string, unknown> = {}, init: RequestInit = {}): Promise<T> {
+  const initHeaders = (init.headers || {}) as Record<string, string>;
   const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
     method: "POST",
     cache: "no-store",
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(await forwardedHeaders()) },
-    body: JSON.stringify(body),
-    ...init
+    headers: { ...initHeaders, "Content-Type": "application/json", ...(await forwardedHeaders()), ...(await csrfHeaders()) },
+    body: JSON.stringify(body)
   });
   if (!response.ok) {
     throw new ApiError(path, response.status);
@@ -534,6 +540,19 @@ async function forwardedHeaders(): Promise<Record<string, string>> {
   } catch {
     return {};
   }
+}
+
+async function csrfHeaders(): Promise<Record<string, string>> {
+  if (typeof window === "undefined") return {};
+  if (!csrfToken) {
+    const response = await fetch(`${API_BASE}/api/auth/csrf`, { cache: "no-store", credentials: "include" });
+    if (!response.ok) {
+      throw new ApiError("/api/auth/csrf", response.status);
+    }
+    const body = (await response.json()) as { csrf_token?: string };
+    csrfToken = body.csrf_token || "";
+  }
+  return csrfToken ? { "X-Panopticon-CSRF": csrfToken } : {};
 }
 
 export async function getAuthSession() {

@@ -1,5 +1,5 @@
 import { AuthForm } from "./AuthForm";
 
-export default function LoginPage() {
+export default async function LoginPage() {
   return <AuthForm mode="login" />;
 }

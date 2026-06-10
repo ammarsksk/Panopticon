@@ -46,6 +46,20 @@ spec:
               value: "true"
             - name: REPO_INDEX_FILE_LIMIT
               value: "120"
+            - name: REPO_INDEX_CHUNK_CHARS
+              value: "2800"
+            - name: REPO_INDEX_MAX_CHUNKS_PER_FILE
+              value: "24"
+            - name: REPO_EMBEDDING_PROVIDER
+              value: vertex
+            - name: REPO_EMBEDDING_MODEL
+              value: gemini-embedding-001
+            - name: REPO_EMBEDDING_DIMENSIONS
+              value: "768"
+            - name: REPO_EMBEDDING_FALLBACK_TO_LOCAL
+              value: "false"
+            - name: REPO_PGVECTOR_ENABLED
+              value: "true"
             - name: DB_POOL_SIZE
               value: "5"
             - name: DB_MAX_OVERFLOW

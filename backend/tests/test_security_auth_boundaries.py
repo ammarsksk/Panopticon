@@ -29,10 +29,17 @@ def _client(db):
     return TestClient(app)
 
 
+def _csrf(client: TestClient) -> dict:
+    response = client.get("/api/auth/csrf")
+    assert response.status_code == 200
+    return {"X-Panopticon-CSRF": response.json()["csrf_token"]}
+
+
 def _signup(client: TestClient, email: str, workspace: str) -> dict:
     response = client.post(
         "/api/auth/signup",
         json={"email": email, "password": "password-123", "name": email.split("@", 1)[0], "workspace_name": workspace},
+        headers=_csrf(client),
     )
     assert response.status_code == 200
     return response.json()
@@ -79,7 +86,7 @@ def test_chat_rejects_cross_workspace_project_id(monkeypatch):
         db.add(project)
         db.commit()
 
-        response = second.post("/api/chat", json={"project_id": project.id, "message": "Why did the pipeline fail?"})
+        response = second.post("/api/chat", json={"project_id": project.id, "message": "Why did the pipeline fail?"}, headers=_csrf(second))
 
         assert response.status_code == 404
     finally:
@@ -113,7 +120,7 @@ def test_chat_thread_messages_reject_cross_workspace_reads(monkeypatch):
         get_settings.cache_clear()
 
 
-def test_production_session_cookie_is_http_only_secure_and_lax(monkeypatch):
+def test_production_session_cookie_is_http_only_secure_and_cross_site(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     get_settings.cache_clear()
     try:
@@ -122,8 +129,115 @@ def test_production_session_cookie_is_http_only_secure_and_lax(monkeypatch):
         header = response.headers["set-cookie"].lower()
         assert "httponly" in header
         assert "secure" in header
-        assert "samesite=lax" in header
+        assert "samesite=none" in header
     finally:
+        get_settings.cache_clear()
+
+
+def test_csrf_required_for_browser_state_changing_requests(monkeypatch):
+    monkeypatch.setenv("AUTH_REQUIRED", "true")
+    monkeypatch.setenv("CSRF_REQUIRED", "true")
+    get_settings.cache_clear()
+    db = _session()
+    try:
+        client = _client(db)
+        response = client.post(
+            "/api/auth/signup",
+            json={"email": "secure@example.com", "password": "password-123", "name": "Secure", "workspace_name": "Secure"},
+        )
+        assert response.status_code == 403
+
+        response = client.post(
+            "/api/auth/signup",
+            json={"email": "secure@example.com", "password": "password-123", "name": "Secure", "workspace_name": "Secure"},
+            headers=_csrf(client),
+        )
+        assert response.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        get_settings.cache_clear()
+
+
+def test_security_headers_are_added_to_responses():
+    db = _session()
+    try:
+        client = _client(db)
+        response = client.get("/health")
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+        assert response.headers["X-Frame-Options"] == "DENY"
+        assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+
+def test_login_rotates_existing_sessions(monkeypatch):
+    monkeypatch.setenv("AUTH_REQUIRED", "true")
+    get_settings.cache_clear()
+    db = _session()
+    try:
+        client = _client(db)
+        _signup(client, "rotate@example.com", "Rotate Workspace")
+
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "rotate@example.com", "password": "password-123"},
+            headers=_csrf(client),
+        )
+
+        assert response.status_code == 200
+        user = db.scalar(select(models.User).where(models.User.email == "rotate@example.com"))
+        active_sessions = db.scalars(
+            select(models.UserSession)
+            .where(models.UserSession.user_id == user.id)
+            .where(models.UserSession.revoked_at.is_(None))
+        ).all()
+        assert len(active_sessions) == 1
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        get_settings.cache_clear()
+
+
+def test_viewer_cannot_run_admin_sync(monkeypatch):
+    monkeypatch.setenv("AUTH_REQUIRED", "true")
+    get_settings.cache_clear()
+    db = _session()
+    try:
+        client = _client(db)
+        _signup(client, "viewer@example.com", "Viewer Workspace")
+        user = db.scalar(select(models.User).where(models.User.email == "viewer@example.com"))
+        membership = db.scalar(select(models.WorkspaceMember).where(models.WorkspaceMember.user_id == user.id))
+        membership.role = "viewer"
+        db.commit()
+
+        response = client.post("/api/gitlab/projects/sync", headers=_csrf(client))
+
+        assert response.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        get_settings.cache_clear()
+
+
+def test_login_rate_limit_can_block_repeated_attempts(monkeypatch):
+    monkeypatch.setenv("AUTH_REQUIRED", "true")
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
+    monkeypatch.setenv("RATE_LIMIT_LOGIN_PER_WINDOW", "1")
+    get_settings.cache_clear()
+    db = _session()
+    try:
+        client = _client(db)
+        headers = _csrf(client)
+        first = client.post("/api/auth/login", json={"email": "none@example.com", "password": "password-123"}, headers=headers)
+        second = client.post("/api/auth/login", json={"email": "none@example.com", "password": "password-123"}, headers=headers)
+
+        assert first.status_code == 401
+        assert second.status_code == 429
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
         get_settings.cache_clear()
 
 

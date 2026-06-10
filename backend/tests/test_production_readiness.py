@@ -17,7 +17,10 @@ def test_production_settings_reject_incomplete_configuration():
     message = str(exc.value)
     assert "DATABASE_URL must use PostgreSQL" in message
     assert "AUTH_REQUIRED=true" in message
+    assert "CSRF_REQUIRED=true" in message
     assert "GOOGLE_GENAI_USE_VERTEXAI=true" in message
+    assert "REPO_EMBEDDING_PROVIDER=vertex" in message
+    assert "REPO_PGVECTOR_ENABLED=true" in message
 
 
 def test_production_settings_accept_required_controls():
@@ -26,6 +29,8 @@ def test_production_settings_accept_required_controls():
         database_url="postgresql+psycopg://user:pass@host:5432/panopticon",
         allowed_origins=["https://panopticon.example.com"],
         auth_required=True,
+        csrf_required=True,
+        rate_limit_enabled=True,
         gitlab_webhook_secret="webhook-secret",
         gitlab_oauth_client_id="gitlab-client",
         gitlab_oauth_client_secret="gitlab-secret",
@@ -38,6 +43,9 @@ def test_production_settings_accept_required_controls():
         gemini_enabled=True,
         google_genai_use_vertexai=True,
         google_cloud_project="panopticon-495816",
+        repo_embedding_provider="vertex",
+        repo_embedding_model="gemini-embedding-001",
+        repo_pgvector_enabled=True,
         agent_runtime_token="agent-runtime-token",
     )
 
@@ -54,6 +62,9 @@ def test_cloud_run_backend_uses_cloud_sql_and_secret_manager():
     assert "panopticon-database-url" in manifest
     assert "AUTH_REQUIRED" in manifest
     assert 'value: "true"' in manifest
+    assert "REPO_EMBEDDING_PROVIDER" in manifest
+    assert "gemini-embedding-001" in manifest
+    assert "REPO_PGVECTOR_ENABLED" in manifest
 
 
 def test_sensitive_local_env_files_are_ignored():

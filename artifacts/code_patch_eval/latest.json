@@ -1,0 +1,55 @@
+{
+  "total": 500,
+  "passed": 500,
+  "failed": 0,
+  "pass_rate": 1.0,
+  "avg_latency_ms": 0.06777559965848923,
+  "p95_latency_ms": 0.090000219643116,
+  "by_category": {
+    "python_bug_fix": {
+      "passed": 46,
+      "failed": 0
+    },
+    "python_validation": {
+      "passed": 46,
+      "failed": 0
+    },
+    "python_logging": {
+      "passed": 46,
+      "failed": 0
+    },
+    "typescript_validation": {
+      "passed": 46,
+      "failed": 0
+    },
+    "typescript_logging": {
+      "passed": 46,
+      "failed": 0
+    },
+    "ci_timeout": {
+      "passed": 45,
+      "failed": 0
+    },
+    "deployment_config": {
+      "passed": 45,
+      "failed": 0
+    },
+    "json_config": {
+      "passed": 45,
+      "failed": 0
+    },
+    "test_note": {
+      "passed": 45,
+      "failed": 0
+    },
+    "docs_update": {
+      "passed": 45,
+      "failed": 0
+    },
+    "generic_source": {
+      "passed": 45,
+      "failed": 0
+    }
+  },
+  "failures": []
+}

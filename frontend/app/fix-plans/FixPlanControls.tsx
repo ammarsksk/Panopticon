@@ -16,7 +16,13 @@ const FIX_TYPES = [
   { value: "test_scaffold", label: "Test scaffold" },
   { value: "deployment_healthcheck", label: "Deployment healthcheck" },
   { value: "rollback_runbook", label: "Rollback runbook" },
-  { value: "ci_retry_guidance", label: "CI retry guidance" }
+  { value: "ci_retry_guidance", label: "CI retry guidance" },
+  { value: "source_validation", label: "Source validation" },
+  { value: "source_logging", label: "Source logging" },
+  { value: "source_bug_fix", label: "Source bug fix" },
+  { value: "documentation_update", label: "Documentation update" },
+  { value: "config_validation", label: "Config validation" },
+  { value: "generic_code_change", label: "Generic code change" }
 ];
 
 export function NewFixPlanForm({ projects }: { projects: GitLabProject[] }) {

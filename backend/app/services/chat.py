@@ -10,6 +10,7 @@ from app.services.agent_tools import AgentToolService
 from app.services.chat_validation import ChatValidationService
 from app.services.fix_plans import FixPlanService
 from app.services.grounded_recommendations import GroundedRecommendationEngine
+from app.services.repo_context import RepoContextService
 
 
 class ChatService:
@@ -27,7 +28,7 @@ class ChatService:
         intent = _classify_intent(message)
         memory_service = AgentMemoryService(self.db, workspace_id=self.workspace_id)
         captured_memory = memory_service.capture_user_memory(message=message, project=project)
-        context = self._context(project)
+        context = self._context(project, message)
         context["memory"] = memory_service.retrieve(project=project, question=message, current_memory=context.get("memory", []))
         context["grounded_recommendation"] = GroundedRecommendationEngine(self.db, workspace_id=self.workspace_id).recommend(
             project=project,
@@ -142,8 +143,17 @@ class ChatService:
         self.db.flush()
         return message
 
-    def _context(self, project: models.GitLabProject | None) -> dict:
-        return self.tools.chat_context(project)
+    def _context(self, project: models.GitLabProject | None, question: str) -> dict:
+        context = self.tools.chat_context(project)
+        repo_pack = RepoContextService(self.db, workspace_id=self.workspace_id).context_pack(project, query=question, limit=8)
+        if repo_pack["files"]:
+            context["repo_files"] = repo_pack["files"]
+        if repo_pack["chunks"]:
+            context["repo_chunks"] = repo_pack["chunks"]
+        if repo_pack["symbols"]:
+            context["repo_symbols"] = repo_pack["symbols"]
+        context["repo_context_notes"] = repo_pack["notes"]
+        return context
 
     def _prepare_actions_if_requested(self, message: str, project: models.GitLabProject | None) -> list[models.AgentAction]:
         lowered = message.lower()
@@ -315,13 +325,21 @@ class ChatService:
         pipelines = context["pipelines"]
         insights = [item for item in context["pipeline_insights"] if item.status == "failed"]
         failed_jobs = context["failed_jobs"]
+        repo_files = context.get("repo_files", [])
+        repo_chunks = context.get("repo_chunks", [])
+        repo_symbols = context.get("repo_symbols", [])
         parts = [f"Pipeline analysis for {subject}:"]
         if not insights and not failed_jobs and not any(pipeline.status == "failed" for pipeline in pipelines):
             if pipelines:
                 latest = pipelines[0]
                 parts.append(f"- Latest synced pipeline #{latest.pipeline_id} is {latest.status} on ref {latest.ref or 'unknown'}.")
-            parts.append("- Cannot determine a failed job or root cause because no failed pipeline, failed job trace, or failed pipeline insight is stored for this scope.")
-            parts.append("- Next action: sync the latest GitLab pipeline jobs and failed job traces before naming a root cause or preparing a live action.")
+            if repo_files or repo_chunks or repo_symbols:
+                self._append_repo_context(parts, context)
+                parts.append("- I do not need to stop at job traces here: the next answerable step is to inspect the indexed CI/deploy/source files above and compare them with the failed branch or MR.")
+                parts.append("- Next action: refresh pipeline jobs if you need exact log proof, but use repository context now to identify likely affected files and prepare an approval-gated fix plan.")
+            else:
+                parts.append("- Cannot determine a failed job or root cause because no failed pipeline, failed job trace, pipeline insight, or repository context is stored for this scope.")
+                parts.append("- Next action: sync GitLab and refresh repository context before naming a root cause or preparing a live action.")
             self._append_prepared(parts, prepared_actions)
             return "\n".join(parts)
         if insights:
@@ -347,12 +365,34 @@ class ChatService:
             failed_count = len([pipeline for pipeline in pipelines if pipeline.status == "failed"])
             parts.append(f"- Latest synced pipeline #{latest.pipeline_id} is {latest.status} on ref {latest.ref or 'unknown'}.")
             parts.append(f"- Recent failed pipeline count in the synced window: {failed_count}.")
-            parts.append("- No parsed failed job or pipeline insight is stored yet, so Panopticon cannot name an exact root cause from logs.")
+            if repo_files or repo_chunks or repo_symbols:
+                self._append_repo_context(parts, context)
+                parts.append("- No parsed failed job trace is stored yet, so this is repository-grounded triage rather than a final log-proven root cause.")
+            else:
+                parts.append("- No parsed failed job or pipeline insight is stored yet, so Panopticon cannot name an exact root cause from logs.")
         else:
             parts.append("- No pipeline snapshots, failed jobs, or pipeline insights are stored for this scope.")
         self._append_grounded(parts, context)
         self._append_prepared(parts, prepared_actions)
         return "\n".join(parts)
+
+    def _append_repo_context(self, parts: list[str], context: dict) -> None:
+        files = context.get("repo_files", [])[:4]
+        chunks = context.get("repo_chunks", [])[:3]
+        symbols = context.get("repo_symbols", [])[:4]
+        if files:
+            file_list = ", ".join(item.file_path for item in files)
+            parts.append(f"- Repository context to inspect: {file_list}.")
+        if chunks:
+            chunk = chunks[0]
+            excerpt = " ".join(chunk.content.split())[:220]
+            parts.append(f"- Matching code memory: {chunk.file_path}:{chunk.start_line}-{chunk.end_line} contains `{excerpt}`.")
+        if symbols:
+            symbol_list = ", ".join(f"{item.symbol_name} ({item.file_path}:{item.start_line})" for item in symbols)
+            parts.append(f"- Relevant symbols/config keys: {symbol_list}.")
+        notes = context.get("repo_context_notes") or []
+        if notes:
+            parts.append(f"- Repository memory note: {notes[0]}")
 
     def _priority_answer(self, subject: str, context: dict, prepared_actions: list[models.AgentAction]) -> str:
         risks = sorted(context["risks"], key=lambda risk: risk.score, reverse=True)
@@ -477,14 +517,14 @@ class ChatService:
 
     def _citations(self, intent: str, context: dict, prepared_actions: list[models.AgentAction]) -> list[dict]:
         intent_sources = {
-            "pipeline_failure": ["pipeline_insights", "failed_jobs", "pipelines", "repo_files"],
-            "priority": ["risks", "pipeline_insights", "failed_jobs", "incidents", "actions", "repo_files"],
-            "risk": ["risks", "recommendations", "repo_files"],
-            "merge_request": ["merge_requests", "risks", "repo_files"],
+            "pipeline_failure": ["pipeline_insights", "failed_jobs", "pipelines", "repo_files", "repo_chunks", "repo_symbols"],
+            "priority": ["risks", "pipeline_insights", "failed_jobs", "incidents", "actions", "repo_files", "repo_chunks", "repo_symbols"],
+            "risk": ["risks", "recommendations", "repo_files", "repo_chunks", "repo_symbols"],
+            "merge_request": ["merge_requests", "risks", "repo_files", "repo_chunks", "repo_symbols"],
             "incident": ["incidents", "memory", "recommendations"],
             "actions": ["actions", "recommendations"],
-            "memory": ["memory", "incidents"],
-            "summary": ["risks", "pipeline_insights", "pipelines", "merge_requests", "incidents", "recommendations", "actions", "memory", "repo_files"],
+            "memory": ["memory", "incidents", "repo_files", "repo_chunks"],
+            "summary": ["risks", "pipeline_insights", "pipelines", "merge_requests", "incidents", "recommendations", "actions", "memory", "repo_files", "repo_chunks", "repo_symbols"],
         }
         citations: list[dict] = []
         for key in intent_sources.get(intent, intent_sources["summary"]):
@@ -544,6 +584,12 @@ def _citation(kind: str, record) -> dict:
         label = f"{record.file_type} file: {record.file_path}"
         flags = ", ".join((record.signals or {}).get("risk_flags") or [])
         summary = flags or record.language or record.ref
+    elif isinstance(record, models.RepoCodeChunk):
+        label = f"Code chunk: {record.file_path}:{record.start_line}-{record.end_line}"
+        summary = ", ".join((record.keywords or [])[:8]) or record.content[:160]
+    elif isinstance(record, models.RepoSymbolIndex):
+        label = f"{record.symbol_type}: {record.symbol_name}"
+        summary = f"{record.file_path}:{record.start_line} {record.signature}"
     else:
         label = getattr(record, "title", "") or getattr(record, "name", "") or getattr(record, "summary", "") or kind
         summary = getattr(record, "summary", "") or getattr(record, "likely_cause", "") or getattr(record, "probable_root_cause", "") or getattr(record, "status", "")
@@ -559,7 +605,7 @@ def _llm_evidence(intent: str, context: dict, citations: list[dict], prepared_ac
     selected_ids = {(citation["type"], citation["id"]) for citation in citations}
     evidence: list[dict] = []
     for kind, records in context.items():
-        if kind == "project":
+        if kind in {"project", "repo_context_notes"}:
             continue
         if kind == "grounded_recommendation" and isinstance(records, dict):
             evidence.append(
@@ -575,7 +621,11 @@ def _llm_evidence(intent: str, context: dict, citations: list[dict], prepared_ac
                 }
             )
             continue
+        if not isinstance(records, list):
+            continue
         for record in records[:3]:
+            if not hasattr(record, "id"):
+                continue
             if (kind, record.id) in selected_ids:
                 evidence.append(_record_evidence(kind, record))
     for action in prepared_actions:
@@ -705,6 +755,36 @@ def _record_evidence(kind: str, record) -> dict:
                 "language": record.language,
                 "signals": record.signals,
                 "content_excerpt": record.content_excerpt[:2500],
+            }
+        )
+    elif isinstance(record, models.RepoCodeChunk):
+        base.update(
+            {
+                "project_path": record.project_path,
+                "file_path": record.file_path,
+                "ref": record.ref,
+                "chunk_index": record.chunk_index,
+                "start_line": record.start_line,
+                "end_line": record.end_line,
+                "language": record.language,
+                "keywords": record.keywords,
+                "content": _redact_secret_text(record.content[:2500]),
+                "embedding_model": record.embedding_model,
+                "embedding_provider": record.embedding_provider,
+                "embedding_status": record.embedding_status,
+            }
+        )
+    elif isinstance(record, models.RepoSymbolIndex):
+        base.update(
+            {
+                "project_path": record.project_path,
+                "file_path": record.file_path,
+                "ref": record.ref,
+                "symbol_name": record.symbol_name,
+                "symbol_type": record.symbol_type,
+                "signature": _redact_secret_text(record.signature),
+                "start_line": record.start_line,
+                "end_line": record.end_line,
             }
         )
     return base

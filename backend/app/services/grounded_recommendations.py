@@ -102,6 +102,8 @@ class GroundedRecommendationEngine:
         evidence.extend(_records_to_evidence("failed_jobs", self._records(models.JobSnapshot, project_path, desc(models.JobSnapshot.synced_at), 8, models.JobSnapshot.status == "failed")))
         evidence.extend(_records_to_evidence("merge_requests", self._records(models.MergeRequestSnapshot, project_path, desc(models.MergeRequestSnapshot.updated_at_gitlab), 8)))
         evidence.extend(_records_to_evidence("repo_files", self._records(models.RepoFileIndex, project_path, desc(models.RepoFileIndex.indexed_at), 12)))
+        evidence.extend(_records_to_evidence("repo_chunks", self._records(models.RepoCodeChunk, project_path, desc(models.RepoCodeChunk.indexed_at), 12)))
+        evidence.extend(_records_to_evidence("repo_symbols", self._records(models.RepoSymbolIndex, project_path, desc(models.RepoSymbolIndex.indexed_at), 12)))
         evidence.extend(_records_to_evidence("memory", self._records(models.MemoryRecord, project_path, desc(models.MemoryRecord.created_at), 5)))
         return _rank_evidence(evidence, issue_type=issue_type, question=question)[:12]
 
@@ -158,6 +160,8 @@ def evidence_strength(evidence: list[dict[str, Any]]) -> float:
     score += len(kinds) * 0.035
     if any(item["type"] == "repo_files" for item in evidence):
         score += 0.12
+    if any(item["type"] in {"repo_chunks", "repo_symbols"} for item in evidence):
+        score += 0.14
     if any(item["type"] in {"failed_jobs", "pipeline_insights"} for item in evidence):
         score += 0.13
     if any(item["type"] == "risks" for item in evidence):
@@ -169,7 +173,7 @@ def evidence_strength(evidence: list[dict[str, Any]]) -> float:
 
 def _context_evidence(context: dict[str, Any], *, issue_type: str, question: str) -> list[dict[str, Any]]:
     evidence: list[dict[str, Any]] = []
-    for kind in ["risks", "pipeline_insights", "failed_jobs", "pipelines", "merge_requests", "repo_files", "incidents", "memory", "recommendations"]:
+    for kind in ["risks", "pipeline_insights", "failed_jobs", "pipelines", "merge_requests", "repo_files", "repo_chunks", "repo_symbols", "incidents", "memory", "recommendations"]:
         records = context.get(kind, []) or []
         evidence.extend(_records_to_evidence(kind, records[:8]))
     return _rank_evidence(evidence, issue_type=issue_type, question=question)
@@ -249,6 +253,32 @@ def _record_to_evidence(kind: str, record: Any) -> dict[str, Any]:
                 "details": [record.content_excerpt[:1200]],
             }
         )
+    elif isinstance(record, models.RepoCodeChunk):
+        base.update(
+            {
+                "label": f"Code chunk {record.file_path}:{record.start_line}-{record.end_line}",
+                "summary": ", ".join((record.keywords or [])[:8]) or record.language or "indexed code chunk",
+                "file_path": record.file_path,
+                "language": record.language,
+                "start_line": record.start_line,
+                "end_line": record.end_line,
+                "embedding_provider": record.embedding_provider,
+                "embedding_status": record.embedding_status,
+                "details": [record.content[:1200]],
+            }
+        )
+    elif isinstance(record, models.RepoSymbolIndex):
+        base.update(
+            {
+                "label": f"{record.symbol_type}: {record.symbol_name}",
+                "summary": record.signature or record.file_path,
+                "file_path": record.file_path,
+                "symbol_name": record.symbol_name,
+                "symbol_type": record.symbol_type,
+                "start_line": record.start_line,
+                "details": [record.signature],
+            }
+        )
     elif isinstance(record, models.IncidentRecord):
         base.update({"label": record.title, "summary": record.probable_root_cause, "severity": record.severity, "details": record.recommendations})
     elif isinstance(record, models.MemoryRecord):
@@ -269,15 +299,17 @@ def _rank_evidence(evidence: list[dict[str, Any]], *, issue_type: str = "summary
             "failed_jobs": 0.85,
             "risks": 0.8,
             "repo_files": 0.7,
+            "repo_chunks": 0.76,
+            "repo_symbols": 0.68,
             "merge_requests": 0.55,
             "pipelines": 0.45,
             "incidents": 0.45,
             "memory": 0.35,
             "recommendations": 0.25,
         }.get(item["type"], 0.2)
-        if issue_type == "pipeline_failure" and item["type"] in {"pipeline_insights", "failed_jobs", "repo_files", "pipelines"}:
+        if issue_type == "pipeline_failure" and item["type"] in {"pipeline_insights", "failed_jobs", "repo_files", "repo_chunks", "repo_symbols", "pipelines"}:
             kind_weight += 0.2
-        if issue_type == "deployment_risk" and item["type"] in {"risks", "repo_files", "merge_requests"}:
+        if issue_type == "deployment_risk" and item["type"] in {"risks", "repo_files", "repo_chunks", "repo_symbols", "merge_requests"}:
             kind_weight += 0.2
         text = " ".join([str(item.get("label", "")), str(item.get("summary", "")), str(item.get("file_path", ""))]).lower()
         keyword_weight = sum(0.04 for keyword in keywords if keyword in text)
@@ -404,6 +436,8 @@ def _primary_source(evidence: list[dict[str, Any]]) -> dict[str, Any]:
         "failed_jobs": "pipeline",
         "incidents": "incident",
         "repo_files": "repository",
+        "repo_chunks": "repository",
+        "repo_symbols": "repository",
     }.get(item["type"], item["type"])
     return {"type": source_type, "id": item.get("id", "")}
 

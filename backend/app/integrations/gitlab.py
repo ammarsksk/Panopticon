@@ -166,12 +166,19 @@ class GitLabClient:
             "sort": "desc",
             "per_page": min(limit, 100),
         }
-        membership = self._request("GET", "/projects", params={**base_params, "membership": "true"})
-        owned = self._request("GET", "/projects", params={**base_params, "owned": "true"})
+        membership = self._safe_list_projects({**base_params, "membership": "true"})
+        owned = self._safe_list_projects({**base_params, "owned": "true"})
         return _dedupe_projects(
             (membership if isinstance(membership, list) else [])
             + (owned if isinstance(owned, list) else [])
         )[:limit]
+
+    def _safe_list_projects(self, params: dict) -> list[dict]:
+        try:
+            result = self._request("GET", "/projects", params=params)
+        except httpx.HTTPStatusError:
+            return []
+        return result if isinstance(result, list) else []
 
     def list_open_merge_requests(self, project_path: str, limit: int = 20) -> list[dict]:
         params = {

@@ -1,13 +1,5 @@
-import { getDashboardData } from "@/lib/api";
-import { redirectIfUnauthorized } from "./authRedirect";
-import { DashboardExperience } from "./DashboardExperience";
+import { LandingPage } from "./LandingPage";
 
-export default async function Home() {
-  let data;
-  try {
-    data = await getDashboardData();
-  } catch (error) {
-    redirectIfUnauthorized(error);
-  }
-  return <DashboardExperience data={data} />;
+export default function Home() {
+  return <LandingPage />;
 }

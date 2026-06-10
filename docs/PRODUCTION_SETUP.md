@@ -6,6 +6,7 @@ This guide promotes Panopticon from local demo mode to a production-ready deploy
 - Cloud SQL for PostgreSQL
 - Secret Manager for sensitive values
 - Vertex AI Gemini through a Cloud Run service account
+- Vertex/Gemini repository embeddings with Cloud SQL pgvector
 - GitLab webhooks and API token
 - Slack incoming webhook
 
@@ -118,6 +119,23 @@ docs/CLOUD_SQL_MIGRATION.md
 
 Use that document first. It creates Cloud SQL, configures Secret Manager, runs Alembic, and verifies the active database.
 
+Repository-aware chat requires Cloud SQL pgvector in production:
+
+```powershell
+cd C:\Users\LENOVO\Downloads\Panopticon\backend
+python -m app.scripts.check_repo_embeddings --repair-pgvector
+```
+
+Production repository memory env:
+
+```text
+REPO_EMBEDDING_PROVIDER=vertex
+REPO_EMBEDDING_MODEL=gemini-embedding-001
+REPO_EMBEDDING_DIMENSIONS=768
+REPO_EMBEDDING_FALLBACK_TO_LOCAL=false
+REPO_PGVECTOR_ENABLED=true
+```
+
 Manual commands are kept here for reference only.
 
 Create an instance:
@@ -200,7 +218,7 @@ gcloud.cmd run deploy panopticon-backend `
   --region us-central1 `
   --service-account panopticon-runtime@panopticon-495816.iam.gserviceaccount.com `
   --add-cloudsql-instances panopticon-495816:us-central1:panopticon-postgres `
-  --set-env-vars APP_ENV=production,ALLOWED_ORIGINS=https://YOUR_FRONTEND_DOMAIN,GEMINI_ENABLED=true,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=panopticon-495816,GOOGLE_CLOUD_LOCATION=global,GEMINI_MODEL=gemini-2.5-pro,DRY_RUN_ACTIONS=true,DISPATCH_ACTIONS=true `
+  --set-env-vars APP_ENV=production,ALLOWED_ORIGINS=https://YOUR_FRONTEND_DOMAIN,GEMINI_ENABLED=true,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=panopticon-495816,GOOGLE_CLOUD_LOCATION=global,GEMINI_MODEL=gemini-2.5-pro,REPO_EMBEDDING_PROVIDER=vertex,REPO_EMBEDDING_MODEL=gemini-embedding-001,REPO_EMBEDDING_DIMENSIONS=768,REPO_EMBEDDING_FALLBACK_TO_LOCAL=false,REPO_PGVECTOR_ENABLED=true,DRY_RUN_ACTIONS=true,DISPATCH_ACTIONS=true `
   --set-secrets DATABASE_URL=panopticon-database-url:latest,GITLAB_TOKEN=panopticon-gitlab-token:latest,GITLAB_WEBHOOK_SECRET=panopticon-gitlab-webhook-secret:latest,SLACK_WEBHOOK_URL=panopticon-slack-webhook-url:latest `
   --allow-unauthenticated `
   --project panopticon-495816

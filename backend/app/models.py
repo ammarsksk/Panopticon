@@ -205,6 +205,69 @@ class RepoFileIndex(Base):
     indexed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
 
+class RepoFileContent(Base):
+    __tablename__ = "repo_file_contents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("gitlab_projects.id"), nullable=True, index=True)
+    repo_file_index_id: Mapped[int | None] = mapped_column(ForeignKey("repo_file_indexes.id"), nullable=True, index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    file_path: Mapped[str] = mapped_column(String(600), index=True)
+    ref: Mapped[str] = mapped_column(String(255), default="", index=True)
+    content_sha: Mapped[str] = mapped_column(String(160), default="", index=True)
+    content_text: Mapped[str] = mapped_column(Text, default="")
+    redaction_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    line_count: Mapped[int] = mapped_column(Integer, default=0)
+    is_truncated: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    indexed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class RepoCodeChunk(Base):
+    __tablename__ = "repo_code_chunks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("gitlab_projects.id"), nullable=True, index=True)
+    repo_file_index_id: Mapped[int | None] = mapped_column(ForeignKey("repo_file_indexes.id"), nullable=True, index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    file_path: Mapped[str] = mapped_column(String(600), index=True)
+    ref: Mapped[str] = mapped_column(String(255), default="", index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    start_line: Mapped[int] = mapped_column(Integer, default=1)
+    end_line: Mapped[int] = mapped_column(Integer, default=1)
+    language: Mapped[str] = mapped_column(String(80), default="", index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    token_estimate: Mapped[int] = mapped_column(Integer, default=0)
+    keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
+    embedding_model: Mapped[str] = mapped_column(String(120), default="local-keyword-v1", index=True)
+    embedding_provider: Mapped[str] = mapped_column(String(80), default="local", index=True)
+    embedding_status: Mapped[str] = mapped_column(String(80), default="ready", index=True)
+    embedding_error: Mapped[str] = mapped_column(Text, default="")
+    embedding: Mapped[list[float]] = mapped_column(JSON, default=list)
+    content_sha: Mapped[str] = mapped_column(String(160), default="", index=True)
+    indexed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class RepoSymbolIndex(Base):
+    __tablename__ = "repo_symbol_indexes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("gitlab_projects.id"), nullable=True, index=True)
+    repo_file_index_id: Mapped[int | None] = mapped_column(ForeignKey("repo_file_indexes.id"), nullable=True, index=True)
+    project_path: Mapped[str] = mapped_column(String(255), index=True)
+    file_path: Mapped[str] = mapped_column(String(600), index=True)
+    ref: Mapped[str] = mapped_column(String(255), default="", index=True)
+    symbol_name: Mapped[str] = mapped_column(String(255), index=True)
+    symbol_type: Mapped[str] = mapped_column(String(80), default="", index=True)
+    signature: Mapped[str] = mapped_column(String(800), default="")
+    start_line: Mapped[int] = mapped_column(Integer, default=1)
+    end_line: Mapped[int] = mapped_column(Integer, default=1)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    indexed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
 class MergeRequestSnapshot(Base):
     __tablename__ = "merge_request_snapshots"
 

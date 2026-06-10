@@ -63,7 +63,7 @@ Run and record:
 
 ```powershell
 cd C:\Users\LENOVO\Downloads\Panopticon\backend
-$env:AUTH_REQUIRED='false'; python -m pytest -q
+$env:AUTH_REQUIRED='false'; $env:CSRF_REQUIRED='false'; python -m pytest -q
 ```
 
 ```powershell
@@ -490,6 +490,8 @@ After sign-in, show setup checklist if incomplete:
 - Sign-in is the natural next step.
 
 ## Phase 7: Production Auth And Security Hardening
+
+Status: Implemented in the application backend/frontend. Covered by the focused security suite and the full backend suite.
 
 ### Goal
 

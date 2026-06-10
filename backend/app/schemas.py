@@ -145,12 +145,74 @@ class RepoFileIndexOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RepoFileContentOut(BaseModel):
+    id: int
+    project_id: int | None
+    repo_file_index_id: int | None
+    project_path: str
+    file_path: str
+    ref: str
+    content_sha: str
+    content_text: str
+    redaction_summary: dict[str, Any]
+    line_count: int
+    is_truncated: bool
+    indexed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RepoCodeChunkOut(BaseModel):
+    id: int
+    project_id: int | None
+    repo_file_index_id: int | None
+    project_path: str
+    file_path: str
+    ref: str
+    chunk_index: int
+    start_line: int
+    end_line: int
+    language: str
+    content: str
+    token_estimate: int
+    keywords: list[str]
+    embedding_model: str
+    embedding_provider: str
+    embedding_status: str
+    embedding_error: str
+    content_sha: str
+    indexed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RepoSymbolIndexOut(BaseModel):
+    id: int
+    project_id: int | None
+    repo_file_index_id: int | None
+    project_path: str
+    file_path: str
+    ref: str
+    symbol_name: str
+    symbol_type: str
+    signature: str
+    start_line: int
+    end_line: int
+    metadata_json: dict[str, Any]
+    indexed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class RepoContextSummaryOut(BaseModel):
     indexed_files: int
+    indexed_chunks: int = 0
+    indexed_symbols: int = 0
     by_type: dict[str, int]
     by_language: dict[str, int]
     latest_run: RepoIndexRunOut | None
     priority_files: list[RepoFileIndexOut]
+    priority_symbols: list[RepoSymbolIndexOut] = []
 
 
 class MergeRequestSnapshotOut(BaseModel):

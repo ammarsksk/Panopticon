@@ -4,7 +4,7 @@ import base64
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
@@ -207,7 +207,7 @@ class OAuthService:
             "configured": self.gitlab_configured(),
             "connected": bool(connection),
             "account_label": connection.account_label if connection else "",
-            "scopes": connection.scopes if connection else [],
+            "scopes": _scope_list(connection.scopes) if connection else [],
             "expires_at": connection.expires_at if connection else None,
             "base_url": self.settings.gitlab_base_url.rstrip("/"),
         }
@@ -220,7 +220,7 @@ class OAuthService:
             "configured": self.slack_configured(),
             "connected": bool(connection),
             "account_label": connection.account_label if connection else "",
-            "scopes": connection.scopes if connection else [],
+            "scopes": _scope_list(connection.scopes) if connection else [],
             "expires_at": connection.expires_at if connection else None,
             "base_url": "https://slack.com",
             "channel": webhook.get("channel") or "",
@@ -241,7 +241,7 @@ class OAuthService:
             state_hash=token_hash(raw_state),
             user_id=user_id,
             workspace_id=workspace_id,
-            redirect_after=_safe_redirect(redirect_after),
+            redirect_after=_safe_redirect(redirect_after, self.settings),
             expires_at=_now() + timedelta(minutes=self.settings.oauth_state_ttl_minutes),
         )
         self.db.add(record)
@@ -328,7 +328,7 @@ class OAuthService:
             )
             response.raise_for_status()
             token_payload = response.json()
-        self._apply_tokens(connection, token_payload, scopes=str(token_payload.get("scope") or "").split() or connection.scopes)
+        self._apply_tokens(connection, token_payload, scopes=str(token_payload.get("scope") or "").split() or _scope_list(connection.scopes))
         self.db.commit()
 
     def _upsert_connection(
@@ -462,10 +462,30 @@ def _fernet(settings: Settings) -> Fernet | None:
         return None
 
 
-def _safe_redirect(value: str) -> str:
-    if not value or value.startswith("http://") or value.startswith("https://") or not value.startswith("/"):
+def _safe_redirect(value: str, settings: Settings) -> str:
+    if not value:
+        return "/"
+    if value.startswith("/"):
+        return value
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return "/"
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    if origin not in (settings.allowed_origins or []):
         return "/"
     return value
+
+
+def _scope_list(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, tuple):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [item.strip() for item in value.replace(",", " ").split() if item.strip()]
+    return [str(value).strip()] if str(value).strip() else []
 
 
 def _now() -> datetime:

@@ -4,8 +4,8 @@
 - Passed: 119
 - Failed: 0
 - Pass rate: 100.0%
-- Average latency: 20.7 ms
-- p95 latency: 36.7 ms
+- Average latency: 44.9 ms
+- p95 latency: 126.8 ms
 
 ## By Category
 

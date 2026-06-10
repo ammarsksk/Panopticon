@@ -1,10 +1,14 @@
 import hashlib
 import json
 import re
+import secrets
+import time
+from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -17,7 +21,7 @@ from app.integrations.slack import parse_slack_form, verified_slack_body
 from app.memory.repository import OperationalMemory
 from app.services.agent_actions import AgentActionService
 from app.services.agent_tools import AgentToolService, mcp_text_result
-from app.services.auth import AuthService, RequestContext, assign_workspace, clear_session_cookie, get_current_context, set_session_cookie, workspace_filter
+from app.services.auth import AuthService, RequestContext, assign_workspace, clear_session_cookie, get_current_context, require_role, set_session_cookie, workspace_filter
 from app.services.chat import ChatService
 from app.services.fix_plans import FixPlanService
 from app.services.gitlab_sync import GitLabProjectSyncService
@@ -40,6 +44,116 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+CSRF_HEADER = "X-Panopticon-CSRF"
+_rate_limits: dict[tuple[str, str], list[float]] = {}
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    current_settings = get_settings()
+    rate_limited = _rate_limit_response(request, current_settings)
+    if rate_limited is not None:
+        return _with_security_headers(rate_limited)
+
+    if _requires_csrf(request, current_settings) and not _valid_csrf(request, current_settings):
+        return _with_security_headers(JSONResponse({"detail": "CSRF token missing or invalid"}, status_code=403))
+
+    response = await call_next(request)
+    return _with_security_headers(response)
+
+
+def _requires_csrf(request: Request, current_settings) -> bool:
+    if not current_settings.csrf_required:
+        return False
+    if request.method.upper() not in UNSAFE_METHODS:
+        return False
+    path = request.url.path
+    if not path.startswith("/api/"):
+        return False
+    if path == "/api/auth/csrf":
+        return False
+    authorization = request.headers.get("Authorization", "")
+    if authorization.lower().startswith("bearer "):
+        return False
+    return True
+
+
+def _valid_csrf(request: Request, current_settings) -> bool:
+    cookie_token = request.cookies.get(current_settings.csrf_cookie_name, "")
+    header_token = request.headers.get(CSRF_HEADER, "")
+    return bool(cookie_token and header_token and secrets.compare_digest(cookie_token, header_token))
+
+
+def _rate_limit_response(request: Request, current_settings):
+    if not current_settings.rate_limit_enabled:
+        return None
+    bucket, limit = _rate_limit_bucket(request, current_settings)
+    if not bucket or limit <= 0:
+        return None
+    now_ts = time.monotonic()
+    window_start = now_ts - max(1, current_settings.rate_limit_window_seconds)
+    key = (_client_key(request), bucket)
+    hits = [hit for hit in _rate_limits.get(key, []) if hit >= window_start]
+    if len(hits) >= limit:
+        _rate_limits[key] = hits
+        return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
+    hits.append(now_ts)
+    _rate_limits[key] = hits
+    return None
+
+
+def _rate_limit_bucket(request: Request, current_settings) -> tuple[str, int]:
+    path = request.url.path
+    if path == "/api/auth/login":
+        return "login", current_settings.rate_limit_login_per_window
+    if path == "/api/auth/signup":
+        return "signup", current_settings.rate_limit_signup_per_window
+    if path == "/api/chat":
+        return "chat", current_settings.rate_limit_chat_per_window
+    if path.startswith("/api/agent/tools") or path == "/mcp":
+        return "tool", current_settings.rate_limit_tool_per_window
+    return "", 0
+
+
+def _client_key(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _with_security_headers(response: Response) -> Response:
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    if get_settings().is_production:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
+def _frontend_redirect(target: str) -> str:
+    if target.startswith("http://") or target.startswith("https://"):
+        return target
+    return f"{get_settings().app_public_url.rstrip('/')}{target if target.startswith('/') else '/' + target}"
+
+
+def _redirect_after_from_request(request: Request, redirect_after: str) -> str:
+    if redirect_after.startswith("http://") or redirect_after.startswith("https://"):
+        return redirect_after
+    referer = request.headers.get("Referer", "")
+    parsed = urlparse(referer)
+    if parsed.scheme and parsed.netloc:
+        host = "localhost" if parsed.hostname == "127.0.0.1" else parsed.hostname
+        port = f":{parsed.port}" if parsed.port else ""
+        origin = f"{parsed.scheme}://{host}{port}"
+        if origin in (get_settings().allowed_origins or []):
+            path = redirect_after if redirect_after.startswith("/") else f"/{redirect_after}"
+            return f"{origin}{path}"
+    return redirect_after
+
 
 @app.on_event("startup")
 def on_startup() -> None:
@@ -55,7 +169,22 @@ def health() -> dict:
 
 @app.get("/api/auth/me", response_model=schemas.AuthSessionOut)
 def auth_me(context: RequestContext = Depends(get_current_context)) -> dict:
-    return {"user": context.user, "workspace": context.workspace, "role": context.role, "auth_required": settings.auth_required}
+    return {"user": context.user, "workspace": context.workspace, "role": context.role, "auth_required": get_settings().auth_required}
+
+
+@app.get("/api/auth/csrf")
+def auth_csrf(response: Response) -> dict:
+    current_settings = get_settings()
+    token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key=current_settings.csrf_cookie_name,
+        value=token,
+        max_age=current_settings.session_ttl_hours * 3600,
+        httponly=False,
+        secure=current_settings.is_production,
+        samesite="none" if current_settings.is_production else "lax",
+    )
+    return {"csrf_token": token}
 
 
 @app.post("/api/auth/signup", response_model=schemas.AuthSessionOut)
@@ -95,9 +224,9 @@ def auth_logout(request: Request, response: Response, db: Session = Depends(get_
 
 
 @app.get("/api/auth/google/start")
-def google_oauth_start(db: Session = Depends(get_db), redirect_after: str = "/"):
+def google_oauth_start(request: Request, db: Session = Depends(get_db), redirect_after: str = "/"):
     try:
-        url = OAuthService(db).google_auth_url(redirect_after=redirect_after)
+        url = OAuthService(db).google_auth_url(redirect_after=_redirect_after_from_request(request, redirect_after))
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from None
     return RedirectResponse(url)
@@ -111,7 +240,7 @@ def google_oauth_callback(code: str = "", state: str = "", db: Session = Depends
         result = OAuthService(db).complete_google_callback(code=code, state=state)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Google OAuth failed: {exc}") from None
-    response = RedirectResponse(f"{settings.app_public_url.rstrip('/')}{result.redirect_url}")
+    response = RedirectResponse(_frontend_redirect(result.redirect_url))
     if result.session_token:
         set_session_cookie(response, result.session_token)
     return response
@@ -123,9 +252,9 @@ def gitlab_oauth_status(db: Session = Depends(get_db), context: RequestContext =
 
 
 @app.get("/api/integrations/gitlab/connect")
-def gitlab_oauth_connect(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), redirect_after: str = "/projects"):
+def gitlab_oauth_connect(request: Request, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), redirect_after: str = "/projects"):
     try:
-        url = OAuthService(db).gitlab_auth_url(user_id=context.user.id, workspace_id=context.workspace.id, redirect_after=redirect_after)
+        url = OAuthService(db).gitlab_auth_url(user_id=context.user.id, workspace_id=context.workspace.id, redirect_after=_redirect_after_from_request(request, redirect_after))
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from None
     return RedirectResponse(url)
@@ -139,7 +268,7 @@ def gitlab_oauth_callback(code: str = "", state: str = "", db: Session = Depends
         result = OAuthService(db).complete_gitlab_callback(code=code, state=state)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"GitLab OAuth failed: {exc}") from None
-    return RedirectResponse(f"{settings.app_public_url.rstrip('/')}{result.redirect_url}")
+    return RedirectResponse(_frontend_redirect(result.redirect_url))
 
 
 @app.post("/webhooks/gitlab")
@@ -174,7 +303,7 @@ def list_events(db: Session = Depends(get_db), context: RequestContext = Depends
 
 
 @app.post("/api/gitlab/projects/sync", response_model=schemas.ProjectSyncRunOut)
-def sync_gitlab_projects(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+def sync_gitlab_projects(db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin")), limit: int = 50):
     capped_limit = max(1, min(limit, 100))
     client = gitlab_client_for_workspace(db, context.workspace.id)
     return GitLabProjectSyncService(db, client=client, workspace_id=context.workspace.id).sync(limit=capped_limit)
@@ -245,14 +374,14 @@ def list_project_jobs(project_id: int, db: Session = Depends(get_db), context: R
 
 
 @app.post("/api/projects/{project_id}/pipelines/{pipeline_id}/jobs/refresh", response_model=list[schemas.JobSnapshotOut])
-def refresh_pipeline_jobs(project_id: int, pipeline_id: str, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+def refresh_pipeline_jobs(project_id: int, pipeline_id: str, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin")), limit: int = 50):
     project = _get_project_or_404(db, project_id, context)
     client = gitlab_client_for_workspace(db, context.workspace.id)
     return GitLabProjectSyncService(db, client=client, workspace_id=context.workspace.id).refresh_pipeline_jobs(project, pipeline_id, job_limit=max(1, min(limit, 100)))
 
 
 @app.post("/api/projects/{project_id}/repo-index/refresh", response_model=schemas.RepoIndexRunOut)
-def refresh_project_repo_index(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def refresh_project_repo_index(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     project = _get_project_or_404(db, project_id, context)
     client = gitlab_client_for_workspace(db, context.workspace.id)
     return RepoContextService(db, client=client, workspace_id=context.workspace.id).index_project(project)
@@ -262,6 +391,43 @@ def refresh_project_repo_index(project_id: int, db: Session = Depends(get_db), c
 def list_project_repo_files(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
     project = _get_project_or_404(db, project_id, context)
     return RepoContextService(db, workspace_id=context.workspace.id).files(project, limit=max(1, min(limit, 100)))
+
+
+@app.get("/api/projects/{project_id}/repo-index/tree")
+def list_project_repo_tree(project_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 200):
+    project = _get_project_or_404(db, project_id, context)
+    return RepoContextService(db, workspace_id=context.workspace.id).list_tree(project, limit=max(1, min(limit, 500)))
+
+
+@app.get("/api/projects/{project_id}/repo-index/files/content", response_model=schemas.RepoFileContentOut | None)
+def read_project_repo_file(project_id: int, file_path: str, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+    project = _get_project_or_404(db, project_id, context)
+    return RepoContextService(db, workspace_id=context.workspace.id).read_file(project, file_path=file_path)
+
+
+@app.get("/api/projects/{project_id}/repo-index/files/range")
+def read_project_repo_file_range(
+    project_id: int,
+    file_path: str,
+    start_line: int = 1,
+    end_line: int = 120,
+    db: Session = Depends(get_db),
+    context: RequestContext = Depends(get_current_context),
+):
+    project = _get_project_or_404(db, project_id, context)
+    return RepoContextService(db, workspace_id=context.workspace.id).read_file_range(project, file_path=file_path, start_line=start_line, end_line=end_line)
+
+
+@app.get("/api/projects/{project_id}/repo-index/chunks", response_model=list[schemas.RepoCodeChunkOut])
+def search_project_repo_chunks(project_id: int, query: str = "", db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 20):
+    project = _get_project_or_404(db, project_id, context)
+    return RepoContextService(db, workspace_id=context.workspace.id).search_chunks(project=project, query=query, limit=max(1, min(limit, 100)))
+
+
+@app.get("/api/projects/{project_id}/repo-index/symbols", response_model=list[schemas.RepoSymbolIndexOut])
+def search_project_repo_symbols(project_id: int, query: str = "", db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+    project = _get_project_or_404(db, project_id, context)
+    return RepoContextService(db, workspace_id=context.workspace.id).symbols(project, query=query, limit=max(1, min(limit, 200)))
 
 
 @app.get("/api/projects/{project_id}/repo-index/summary", response_model=schemas.RepoContextSummaryOut)
@@ -345,7 +511,7 @@ def get_project_summary(project_id: int, db: Session = Depends(get_db), context:
         "recent_incidents": _latest_by(incidents, lambda incident: f"{incident.project_path}:{incident.title}:{incident.probable_root_cause}"),
         "latest_recommendations": _ranked_recommendations(db, recommendations),
         "recent_actions": actions,
-        "memory_records": memory_records,
+        "memory_records": [_shape_memory_record(record) for record in memory_records],
         "repo_files": repo_summary["priority_files"],
         "latest_repo_index_run": repo_summary["latest_run"],
         "repo_context_summary": repo_summary,
@@ -443,7 +609,7 @@ def project_metrics(db: Session = Depends(get_db), context: RequestContext = Dep
 
 
 @app.post("/api/metrics/snapshots/refresh", response_model=list[schemas.EngineeringMetricSnapshotOut])
-def refresh_metric_snapshots(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def refresh_metric_snapshots(db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     return MetricsService(db, workspace_id=context.workspace.id).refresh_snapshots()
 
 
@@ -454,12 +620,13 @@ def list_metric_snapshots(db: Session = Depends(get_db), context: RequestContext
 
 @app.get("/api/memory", response_model=list[schemas.MemoryRecordOut])
 def list_memory(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
-    return db.scalars(
+    records = db.scalars(
         select(models.MemoryRecord)
         .where(workspace_filter(models.MemoryRecord, context.workspace.id))
         .order_by(desc(models.MemoryRecord.created_at))
         .limit(limit)
     ).all()
+    return [_shape_memory_record(record) for record in records]
 
 
 @app.get("/api/recommendations", response_model=list[schemas.RecommendationOut])
@@ -520,7 +687,7 @@ def list_action_dispatches(db: Session = Depends(get_db), context: RequestContex
 
 
 @app.post("/api/actions/propose-from-recommendations", response_model=list[schemas.AgentActionOut])
-def propose_actions_from_recommendations(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), limit: int = 50):
+def propose_actions_from_recommendations(db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin")), limit: int = 50):
     return AgentActionService(db, workspace_id=context.workspace.id).propose_from_recommendations(limit=max(1, min(limit, 100)))
 
 
@@ -556,7 +723,7 @@ def get_agent_action(action_id: int, db: Session = Depends(get_db), context: Req
 
 
 @app.post("/api/actions/{action_id}/approve", response_model=schemas.AgentActionOut)
-def approve_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def approve_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     decision = decision or schemas.ActionDecisionIn()
     try:
         return AgentActionService(db, workspace_id=context.workspace.id).approve(action_id, actor=decision.actor, reason=decision.reason)
@@ -567,7 +734,7 @@ def approve_agent_action(action_id: int, decision: schemas.ActionDecisionIn | No
 
 
 @app.post("/api/actions/{action_id}/reject", response_model=schemas.AgentActionOut)
-def reject_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def reject_agent_action(action_id: int, decision: schemas.ActionDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     decision = decision or schemas.ActionDecisionIn()
     try:
         return AgentActionService(db, workspace_id=context.workspace.id).reject(action_id, actor=decision.actor, reason=decision.reason)
@@ -578,7 +745,7 @@ def reject_agent_action(action_id: int, decision: schemas.ActionDecisionIn | Non
 
 
 @app.post("/api/actions/{action_id}/execute", response_model=schemas.AgentActionOut)
-def execute_agent_action(action_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def execute_agent_action(action_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     try:
         return AgentActionService(db, workspace_id=context.workspace.id).execute(action_id)
     except LookupError:
@@ -590,7 +757,7 @@ def execute_agent_action(action_id: int, db: Session = Depends(get_db), context:
 
 
 @app.post("/api/fix-plans", response_model=schemas.FixPlanOut)
-def create_fix_plan(request: schemas.FixPlanCreateIn, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def create_fix_plan(request: schemas.FixPlanCreateIn, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     try:
         return FixPlanService(db, workspace_id=context.workspace.id).create(
             project_id=request.project_id,
@@ -622,7 +789,7 @@ def get_fix_plan(plan_id: int, db: Session = Depends(get_db), context: RequestCo
 
 
 @app.post("/api/fix-plans/{plan_id}/approve", response_model=schemas.FixPlanOut)
-def approve_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def approve_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     decision = decision or schemas.FixPlanDecisionIn()
     try:
         return FixPlanService(db, workspace_id=context.workspace.id).approve(plan_id, actor=decision.actor, reason=decision.reason)
@@ -633,7 +800,7 @@ def approve_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = 
 
 
 @app.post("/api/fix-plans/{plan_id}/reject", response_model=schemas.FixPlanOut)
-def reject_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def reject_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = None, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     decision = decision or schemas.FixPlanDecisionIn()
     try:
         return FixPlanService(db, workspace_id=context.workspace.id).reject(plan_id, actor=decision.actor, reason=decision.reason)
@@ -644,7 +811,7 @@ def reject_fix_plan(plan_id: int, decision: schemas.FixPlanDecisionIn | None = N
 
 
 @app.post("/api/fix-plans/{plan_id}/create-branch", response_model=schemas.FixPlanOut)
-def create_fix_plan_branch(plan_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def create_fix_plan_branch(plan_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     try:
         return FixPlanService(db, workspace_id=context.workspace.id).create_branch(plan_id)
     except LookupError:
@@ -656,7 +823,7 @@ def create_fix_plan_branch(plan_id: int, db: Session = Depends(get_db), context:
 
 
 @app.post("/api/fix-plans/{plan_id}/open-merge-request", response_model=schemas.FixPlanOut)
-def open_fix_plan_merge_request(plan_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
+def open_fix_plan_merge_request(plan_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     try:
         return FixPlanService(db, workspace_id=context.workspace.id).open_merge_request(plan_id)
     except LookupError:
@@ -706,9 +873,9 @@ def slack_integration_status(db: Session = Depends(get_db), context: RequestCont
 
 
 @app.get("/api/integrations/slack/connect")
-def slack_oauth_connect(db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), redirect_after: str = "/"):
+def slack_oauth_connect(request: Request, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context), redirect_after: str = "/"):
     try:
-        url = OAuthService(db).slack_auth_url(user_id=context.user.id, workspace_id=context.workspace.id, redirect_after=redirect_after)
+        url = OAuthService(db).slack_auth_url(user_id=context.user.id, workspace_id=context.workspace.id, redirect_after=_redirect_after_from_request(request, redirect_after))
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from None
     return RedirectResponse(url)
@@ -722,7 +889,7 @@ def slack_oauth_callback(code: str = "", state: str = "", db: Session = Depends(
         result = OAuthService(db).complete_slack_callback(code=code, state=state)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Slack OAuth failed: {exc}") from None
-    return RedirectResponse(f"{settings.app_public_url.rstrip('/')}{result.redirect_url}")
+    return RedirectResponse(_frontend_redirect(result.redirect_url))
 
 
 @app.post("/slack/commands")
@@ -767,7 +934,7 @@ def list_agent_tools(db: Session = Depends(get_db), context: RequestContext = De
 
 
 @app.post("/api/agent/tools/{tool_name}/invoke")
-async def invoke_agent_tool(tool_name: str, request: Request, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)) -> dict:
+async def invoke_agent_tool(tool_name: str, request: Request, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
     arguments = await _json_or_empty(request)
     try:
         return AgentToolService(db, workspace_id=context.workspace.id).call_tool(tool_name, arguments)
@@ -803,12 +970,12 @@ def dashboard_summary(db: Session = Depends(get_db), context: RequestContext = D
 
     visible_recommendations = _ranked_recommendations(db, recommendations)[:6]
     return {
-        "active_risks": len(_latest_by([risk for risk in risks if risk.score >= 70], lambda risk: f"{risk.project_path}:{risk.merge_request_iid or risk.deployment_ref}:{risk.score}")),
-        "failed_pipelines": len(_latest_by(pipelines, lambda item: f"{item.project_path}:{item.pipeline_id}:{item.likely_cause}")),
-        "blocked_merge_requests": len(_latest_by([mr for mr in merge_requests if mr.bottleneck_level in {"blocked", "stale"}], lambda mr: f"{mr.project_path}:{mr.merge_request_iid}")),
-        "open_incidents": len(_latest_by(incidents, lambda incident: f"{incident.project_path}:{incident.title}:{incident.probable_root_cause}")),
+        "active_risks": len(_latest_by([risk for risk in risks if _float_value(risk.score) >= 70], lambda risk: f"{_string_value(risk.project_path)}:{_string_value(risk.merge_request_iid or risk.deployment_ref)}:{_float_value(risk.score)}")),
+        "failed_pipelines": len(_latest_by(pipelines, lambda item: f"{_string_value(item.project_path)}:{_string_value(item.pipeline_id)}:{_string_value(item.likely_cause)}")),
+        "blocked_merge_requests": len(_latest_by([mr for mr in merge_requests if _string_value(mr.bottleneck_level) in {"blocked", "stale"}], lambda mr: f"{_string_value(mr.project_path)}:{_string_value(mr.merge_request_iid)}")),
+        "open_incidents": len(_latest_by(incidents, lambda incident: f"{_string_value(incident.project_path)}:{_string_value(incident.title)}:{_string_value(incident.probable_root_cause)}")),
         "synced_projects": len(projects),
-        "latest_project_sync": latest_sync,
+        "latest_project_sync": _shape_project_sync_run(latest_sync) if latest_sync else None,
         "latest_recommendations": visible_recommendations,
         "slack_status": _slack_status(db, context),
         "gitlab_status": OAuthService(db).gitlab_status(workspace_id=context.workspace.id),
@@ -891,7 +1058,75 @@ def _audit_mcp_tool_call(db: Session, context: RequestContext | None, tool_name:
 
 def _ranked_recommendations(db: Session, recommendations: list[models.Recommendation]) -> list[dict]:
     shaped = [_shape_recommendation(db, item) for item in _latest_by(recommendations, _recommendation_key)]
-    return sorted(shaped, key=lambda item: (item["rank_score"], item["created_at"]), reverse=True)
+    return sorted(shaped, key=lambda item: (item["rank_score"], _datetime_sort_value(item["created_at"])), reverse=True)
+
+
+def _shape_project_sync_run(record: models.ProjectSyncRun) -> dict:
+    return {
+        "id": record.id,
+        "provider": _string_value(record.provider, fallback="gitlab"),
+        "status": _string_value(record.status, fallback="unknown"),
+        "projects_seen": _int_value(record.projects_seen),
+        "projects_updated": _int_value(record.projects_updated),
+        "merge_requests_seen": _int_value(record.merge_requests_seen),
+        "pipelines_seen": _int_value(record.pipelines_seen),
+        "jobs_seen": _int_value(record.jobs_seen),
+        "error": _string_value(record.error),
+        "started_at": record.started_at or datetime.now(timezone.utc),
+        "finished_at": record.finished_at,
+    }
+
+
+def _shape_memory_record(record: models.MemoryRecord) -> dict:
+    return {
+        "id": record.id,
+        "project_path": _string_value(record.project_path),
+        "memory_type": _string_value(record.memory_type, fallback="memory"),
+        "signature": _string_value(record.signature),
+        "summary": _string_value(record.summary),
+        "evidence": _list_of_strings(record.evidence),
+        "remediation": _list_of_strings(record.remediation),
+        "created_at": record.created_at or datetime.now(timezone.utc),
+    }
+
+
+def _list_of_strings(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [_string_value(item) for item in value if _string_value(item)]
+    if isinstance(value, tuple):
+        return [_string_value(item) for item in value if _string_value(item)]
+    if isinstance(value, dict):
+        return [f"{_string_value(key)}: {_string_value(item)}" for key, item in value.items() if _string_value(key) or _string_value(item)]
+    text = _string_value(value)
+    return [text] if text else []
+
+
+def _string_value(value, fallback: str = "") -> str:
+    if value is None:
+        return fallback
+    if isinstance(value, str):
+        return value.strip() or fallback
+    return str(value).strip() or fallback
+
+
+def _float_value(value, fallback: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _int_value(value, fallback: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _datetime_sort_value(value) -> datetime:
+    return value if isinstance(value, datetime) else datetime.min.replace(tzinfo=timezone.utc)
 
 
 def _get_project_or_404(db: Session, project_id: int, context: RequestContext) -> models.GitLabProject:
@@ -913,36 +1148,37 @@ def _recommendation_key(recommendation: models.Recommendation) -> str:
 
 
 def _shape_recommendation(db: Session, recommendation: models.Recommendation) -> dict:
-    summary, gemini_analysis = _split_gemini(recommendation.message)
+    summary, gemini_analysis = _split_gemini(_string_value(recommendation.message))
     source = _source_context(db, recommendation)
     severity = _recommendation_severity(recommendation, source)
     confidence = _recommendation_confidence(recommendation, source, gemini_analysis)
     action_type = _recommendation_action_type(recommendation)
     can_execute = action_type in {"gitlab_comment", "slack_alert"}
     requires_approval = can_execute
-    rank_score = _recommendation_rank_score(severity, confidence, can_execute, recommendation.status)
+    status = _string_value(recommendation.status, fallback="pending")
+    rank_score = _recommendation_rank_score(severity, confidence, can_execute, status)
     return {
         "id": recommendation.id,
-        "project_path": recommendation.project_path,
-        "source_type": recommendation.source_type,
-        "source_id": recommendation.source_id,
-        "channel": recommendation.channel,
-        "message": recommendation.message,
+        "project_path": _string_value(recommendation.project_path),
+        "source_type": _string_value(recommendation.source_type),
+        "source_id": _string_value(recommendation.source_id),
+        "channel": _string_value(recommendation.channel, fallback="dashboard"),
+        "message": _string_value(recommendation.message),
         "title": _recommendation_title(recommendation),
         "summary": _clean_text(summary),
         "gemini_analysis": _clean_text(gemini_analysis),
         "evidence": source["evidence"],
         "next_actions": source["next_actions"],
-        "origin": "demo" if recommendation.project_path.startswith("demo/") else "gitlab",
+        "origin": "demo" if _string_value(recommendation.project_path).startswith("demo/") else "gitlab",
         "severity": severity,
         "confidence": confidence,
         "action_type": action_type,
         "can_execute": can_execute,
         "requires_approval": requires_approval,
-        "approval_state": _approval_state(recommendation.status, requires_approval),
+        "approval_state": _approval_state(status, requires_approval),
         "rank_score": rank_score,
-        "status": recommendation.status,
-        "created_at": recommendation.created_at,
+        "status": status,
+        "created_at": recommendation.created_at or datetime.now(timezone.utc),
     }
 
 
@@ -966,11 +1202,12 @@ def _summary_part(message: str) -> str:
 
 
 def _recommendation_title(recommendation: models.Recommendation) -> str:
-    if recommendation.source_type == "risk":
+    source_type = _string_value(recommendation.source_type)
+    if source_type == "risk":
         return "Deployment risk detected"
-    if recommendation.source_type == "pipeline":
+    if source_type == "pipeline":
         return "Pipeline failure detected"
-    if recommendation.source_type == "incident":
+    if source_type == "incident":
         return "Incident intelligence generated"
     return "Operational recommendation"
 
@@ -980,46 +1217,51 @@ def _source_context(db: Session, recommendation: models.Recommendation) -> dict:
     next_actions: list[str] = []
     source = None
     source_id = _safe_int(recommendation.source_id)
-    if recommendation.source_type == "risk" and source_id:
+    source_type = _string_value(recommendation.source_type)
+    if source_type == "risk" and source_id:
         risk = db.get(models.RiskAssessment, source_id)
         if risk:
             source = risk
-            evidence = risk.reasons
-            next_actions = risk.recommendations
-    elif recommendation.source_type == "pipeline" and source_id:
+            evidence = _list_of_strings(risk.reasons)
+            next_actions = _list_of_strings(risk.recommendations)
+    elif source_type == "pipeline" and source_id:
         pipeline = db.get(models.PipelineInsight, source_id)
         if pipeline:
             source = pipeline
-            evidence = pipeline.evidence
-            next_actions = pipeline.recommendations
-    elif recommendation.source_type == "incident" and source_id:
+            evidence = _list_of_strings(pipeline.evidence)
+            next_actions = _list_of_strings(pipeline.recommendations)
+    elif source_type == "incident" and source_id:
         incident = db.get(models.IncidentRecord, source_id)
         if incident:
             source = incident
-            evidence = [entry.get("event", "") for entry in incident.timeline if isinstance(entry, dict)]
-            next_actions = incident.recommendations
+            evidence = _list_of_strings([entry.get("event", "") for entry in incident.timeline if isinstance(entry, dict)])
+            next_actions = _list_of_strings(incident.recommendations)
     return {"source": source, "evidence": evidence, "next_actions": next_actions}
 
 
 def _recommendation_severity(recommendation: models.Recommendation, source: dict) -> str:
     source_record = source.get("source")
     if isinstance(source_record, models.RiskAssessment):
-        if source_record.score >= 85 or source_record.level == "critical":
+        risk_score = _float_value(source_record.score)
+        risk_level = _string_value(source_record.level)
+        if risk_score >= 85 or risk_level == "critical":
             return "critical"
-        if source_record.score >= 70 or source_record.level == "high":
+        if risk_score >= 70 or risk_level == "high":
             return "high"
-        if source_record.score >= 40 or source_record.level == "medium":
+        if risk_score >= 40 or risk_level == "medium":
             return "medium"
         return "low"
     if isinstance(source_record, models.PipelineInsight):
-        return "high" if source_record.status == "failed" else "medium"
+        return "high" if _string_value(source_record.status) == "failed" else "medium"
     if isinstance(source_record, models.IncidentRecord):
-        if source_record.severity in {"critical", "high"}:
-            return source_record.severity
+        severity = _string_value(source_record.severity)
+        if severity in {"critical", "high"}:
+            return severity
         return "medium"
-    if recommendation.source_type == "risk":
+    source_type = _string_value(recommendation.source_type)
+    if source_type == "risk":
         return "high"
-    if recommendation.source_type in {"pipeline", "incident"}:
+    if source_type in {"pipeline", "incident"}:
         return "medium"
     return "info"
 
@@ -1032,26 +1274,28 @@ def _recommendation_confidence(recommendation: models.Recommendation, source: di
         base += 0.18
     if gemini_analysis:
         base += 0.08
-    if recommendation.status in {"sent", "dry_run", "queued"}:
+    if _string_value(recommendation.status) in {"sent", "dry_run", "queued"}:
         base += 0.04
     base += min(evidence_count, 4) * 0.05
     base += min(action_count, 3) * 0.03
     source_record = source.get("source")
     if isinstance(source_record, models.RiskAssessment):
-        base += min(source_record.score, 100) / 500
+        base += min(_float_value(source_record.score), 100) / 500
     return round(min(base, 0.97), 2)
 
 
 def _recommendation_action_type(recommendation: models.Recommendation) -> str:
-    if recommendation.channel == "gitlab_comment":
+    channel = _string_value(recommendation.channel)
+    source_type = _string_value(recommendation.source_type)
+    if channel == "gitlab_comment":
         return "gitlab_comment"
-    if recommendation.channel == "slack":
+    if channel == "slack":
         return "slack_alert"
-    if recommendation.source_type == "pipeline":
+    if source_type == "pipeline":
         return "pipeline_investigation"
-    if recommendation.source_type == "risk":
+    if source_type == "risk":
         return "review_gate"
-    if recommendation.source_type == "incident":
+    if source_type == "incident":
         return "incident_followup"
     return "dashboard_note"
 

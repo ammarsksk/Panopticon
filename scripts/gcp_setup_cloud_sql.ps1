@@ -34,12 +34,16 @@ function Require-Value($Values, $Name) {
 
 function Ensure-Secret($ProjectId, $Name, $Value) {
     $exists = & gcloud.cmd secrets describe $Name --project $ProjectId --format="value(name)" 2>$null
+    $tempFile = [System.IO.Path]::GetTempFileName()
+    [System.IO.File]::WriteAllText($tempFile, $Value)
     if (-not $exists) {
-        $Value | & gcloud.cmd secrets create $Name --data-file=- --replication-policy=automatic --project $ProjectId | Out-Null
+        & gcloud.cmd secrets create $Name --data-file=$tempFile --replication-policy=automatic --project $ProjectId | Out-Null
+        Remove-Item -LiteralPath $tempFile -Force
         Write-Host "created secret: $Name"
         return
     }
-    $Value | & gcloud.cmd secrets versions add $Name --data-file=- --project $ProjectId | Out-Null
+    & gcloud.cmd secrets versions add $Name --data-file=$tempFile --project $ProjectId | Out-Null
+    Remove-Item -LiteralPath $tempFile -Force
     Write-Host "added secret version: $Name"
 }
 

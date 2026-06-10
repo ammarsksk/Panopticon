@@ -4,8 +4,12 @@ import { AuthStatus } from "./AuthStatus";
 import { ThemeToggle } from "./ThemeToggle";
 
 export const metadata: Metadata = {
-  title: "Panopticon",
-  description: "Autonomous GitLab operations intelligence"
+  title: "Panopticon | GitLab Operations Intelligence",
+  description: "Agentic GitLab risk, pipeline, incident, Slack, and code-change operations console.",
+  icons: {
+    icon: "/panopticon-logo.png",
+    apple: "/panopticon-logo.png"
+  }
 };
 
 export default function RootLayout({

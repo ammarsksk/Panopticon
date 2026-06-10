@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Bot, FileCode2, GitBranch, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Bot, CheckCircle2, FileCode2, GitBranch, GitCommitHorizontal, ShieldCheck } from "lucide-react";
 import { FixPlan, getFixPlans, getProjectsData } from "@/lib/api";
 import { redirectIfUnauthorized } from "../authRedirect";
 import { FixPlanControls, NewFixPlanForm } from "./FixPlanControls";
@@ -19,6 +19,144 @@ function statusTone(status: string): "neutral" | "good" | "warn" | "critical" {
   if (status === "draft") return "warn";
   if (["rejected", "failed"].includes(status)) return "critical";
   return "neutral";
+}
+
+type DiffRow = {
+  key: string;
+  type: "meta" | "hunk" | "add" | "delete" | "context";
+  sign: string;
+  text: string;
+  oldLine: number | null;
+  newLine: number | null;
+};
+
+function parseUnifiedDiff(diff: string): DiffRow[] {
+  let oldLine = 0;
+  let newLine = 0;
+  return diff.split("\n").map((line, index) => {
+    if (line.startsWith("@@")) {
+      const match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+      oldLine = match ? Number(match[1]) : oldLine;
+      newLine = match ? Number(match[2]) : newLine;
+      return { key: `${index}-hunk`, type: "hunk", sign: "", text: line, oldLine: null, newLine: null };
+    }
+    if (line.startsWith("---") || line.startsWith("+++")) {
+      return { key: `${index}-meta`, type: "meta", sign: "", text: line, oldLine: null, newLine: null };
+    }
+    if (line.startsWith("+")) {
+      const row = { key: `${index}-add`, type: "add" as const, sign: "+", text: line.slice(1), oldLine: null, newLine };
+      newLine += 1;
+      return row;
+    }
+    if (line.startsWith("-")) {
+      const row = { key: `${index}-delete`, type: "delete" as const, sign: "-", text: line.slice(1), oldLine, newLine: null };
+      oldLine += 1;
+      return row;
+    }
+    const row = {
+      key: `${index}-context`,
+      type: "context" as const,
+      sign: line ? " " : "",
+      text: line.startsWith(" ") ? line.slice(1) : line,
+      oldLine,
+      newLine
+    };
+    oldLine += 1;
+    newLine += 1;
+    return row;
+  });
+}
+
+function diffStats(diff: string) {
+  return diff.split("\n").reduce(
+    (acc, line) => {
+      if (line.startsWith("+") && !line.startsWith("+++")) acc.additions += 1;
+      if (line.startsWith("-") && !line.startsWith("---")) acc.deletions += 1;
+      return acc;
+    },
+    { additions: 0, deletions: 0 }
+  );
+}
+
+function DiffPreview({ item }: { item: { path: string; commit_action: string; diff: string } }) {
+  const rows = parseUnifiedDiff(item.diff || "");
+  const stats = diffStats(item.diff || "");
+  const isCreate = item.commit_action === "create";
+  return (
+    <section className="overflow-hidden border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Badge label={item.commit_action} tone={isCreate ? "good" : "neutral"} />
+          <span className="truncate font-mono text-sm font-semibold text-slate-950">{item.path}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-semibold">
+          <span className="text-emerald-700">+{stats.additions}</span>
+          <span className="text-red-700">-{stats.deletions}</span>
+        </div>
+      </div>
+      {rows.length ? (
+        <div className="max-h-[460px] overflow-auto bg-white font-mono text-xs leading-5">
+          <div className="min-w-max">
+            {rows.map((row) => {
+              const styles = {
+                add: "border-l-2 border-emerald-500 bg-emerald-50 text-emerald-950",
+                delete: "border-l-2 border-red-500 bg-red-50 text-red-950",
+                hunk: "border-l-2 border-teal-500 bg-teal-50 text-teal-900",
+                meta: "border-l-2 border-slate-300 bg-slate-100 text-slate-600",
+                context: "border-l-2 border-transparent bg-white text-slate-700"
+              }[row.type];
+              return (
+                <div key={row.key} className={`grid min-w-full grid-cols-[52px_52px_28px_minmax(84ch,1fr)] ${styles}`}>
+                  <span className="select-none border-r border-slate-200 px-2 py-0.5 text-right text-slate-500">{row.oldLine ?? ""}</span>
+                  <span className="select-none border-r border-slate-200 px-2 py-0.5 text-right text-slate-500">{row.newLine ?? ""}</span>
+                  <span className="select-none px-2 py-0.5 font-bold">{row.sign}</span>
+                  <span className="whitespace-pre px-1 py-0.5">{row.text || " "}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="p-3 text-sm text-slate-600">No textual diff available for this file.</div>
+      )}
+    </section>
+  );
+}
+
+function PlanExecutionSummary({ plan }: { plan: FixPlan }) {
+  const files = plan.plan_payload.files ?? [];
+  const updateCount = files.filter((file) => file.commit_action === "update").length;
+  const createCount = files.filter((file) => file.commit_action === "create").length;
+  const writesPrepared = ["branch_created", "dry_run_branch_ready", "mr_opened", "dry_run_mr_ready"].includes(plan.status);
+  return (
+    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+      <div className="border border-slate-200 bg-slate-50 p-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+          <GitCommitHorizontal size={14} />
+          Code impact
+        </div>
+        <p className="mt-2 text-sm text-slate-700">
+          {updateCount} update{updateCount === 1 ? "" : "s"} and {createCount} new file{createCount === 1 ? "" : "s"} prepared.
+        </p>
+      </div>
+      <div className="border border-slate-200 bg-slate-50 p-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+          <ShieldCheck size={14} />
+          Write behavior
+        </div>
+        <p className="mt-2 text-sm text-slate-700">
+          {writesPrepared ? "Branch/MR step has been requested." : "Draft only. No repository write happens until approval and branch creation."}
+        </p>
+      </div>
+      <div className="border border-slate-200 bg-slate-50 p-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+          <CheckCircle2 size={14} />
+          Review rule
+        </div>
+        <p className="mt-2 text-sm text-slate-700">Review the colored diff and validation commands before creating a branch.</p>
+      </div>
+    </div>
+  );
 }
 
 function PlanCard({ plan }: { plan: FixPlan }) {
@@ -50,6 +188,7 @@ function PlanCard({ plan }: { plan: FixPlan }) {
       </div>
 
       <p className="mt-3 text-sm leading-6 text-slate-700">{plan.summary}</p>
+      <PlanExecutionSummary plan={plan} />
 
       <div className="mt-4 grid gap-3 xl:grid-cols-2">
         <div className="border border-slate-200 bg-slate-50 p-3">
@@ -65,9 +204,12 @@ function PlanCard({ plan }: { plan: FixPlan }) {
                   <span className="text-sm font-semibold text-slate-950">{file.path}</span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">{file.purpose}</p>
-                <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap border border-slate-200 bg-slate-50 p-2 text-xs leading-5 text-slate-700">
-                  {file.content}
-                </pre>
+                <details className="mt-2 border border-slate-200 bg-slate-50">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase text-slate-500">View proposed file content</summary>
+                  <pre className="max-h-56 overflow-auto whitespace-pre-wrap border-t border-slate-200 p-3 text-xs leading-5 text-slate-700">
+                    {file.content}
+                  </pre>
+                </details>
               </div>
             ))}
           </div>
@@ -90,18 +232,13 @@ function PlanCard({ plan }: { plan: FixPlan }) {
 
           {diffs.length ? (
             <div className="border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs font-semibold uppercase text-slate-500">Diff Preview</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-semibold uppercase text-slate-500">GitHub-style Diff Preview</div>
+                <div className="text-xs text-slate-500">{diffs.length} file{diffs.length === 1 ? "" : "s"}</div>
+              </div>
               <div className="mt-2 space-y-2">
                 {diffs.map((item) => (
-                  <div key={item.path} className="border border-slate-200 bg-white p-3">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <Badge label={item.commit_action} />
-                      <span className="text-sm font-semibold text-slate-950">{item.path}</span>
-                    </div>
-                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap border border-slate-200 bg-slate-950 p-2 text-xs leading-5 text-slate-100">
-                      {item.diff || "No textual diff available."}
-                    </pre>
-                  </div>
+                  <DiffPreview key={item.path} item={item} />
                 ))}
               </div>
             </div>
@@ -199,7 +336,7 @@ export default async function FixPlansPage() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
           <div>
-            <Link href="/" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
+            <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
               <ArrowLeft size={16} />
               Dashboard
             </Link>

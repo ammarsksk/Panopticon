@@ -160,6 +160,39 @@ alembic_version=<latest migration>
 postgres_version=PostgreSQL 16...
 ```
 
+Then verify and repair repository vector storage:
+
+```powershell
+cd C:\Users\LENOVO\Downloads\Panopticon\backend
+python -m app.scripts.check_repo_embeddings --repair-pgvector
+```
+
+Or use the project script, which starts Cloud SQL Auth Proxy and sets the required temporary environment values for you:
+
+```powershell
+cd C:\Users\LENOVO\Downloads\Panopticon
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\gcp_repair_repo_embeddings.ps1
+```
+
+Expected output includes:
+
+```text
+OK      pgvector extension, column, and index are present
+OK vector extension
+OK repo_code_chunks.embedding_vector
+OK HNSW cosine index
+```
+
+For production, keep these values in the backend environment before repository sync/indexing:
+
+```text
+REPO_EMBEDDING_PROVIDER=vertex
+REPO_EMBEDDING_MODEL=gemini-embedding-001
+REPO_EMBEDDING_DIMENSIONS=768
+REPO_EMBEDDING_FALLBACK_TO_LOCAL=false
+REPO_PGVECTOR_ENABLED=true
+```
+
 ## Step 5: Keep Local Development Optional
 
 After the Cloud SQL migration, you can still use local PostgreSQL for development.

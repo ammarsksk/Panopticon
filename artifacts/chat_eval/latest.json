@@ -3,8 +3,8 @@
   "passed": 119,
   "failed": 0,
   "pass_rate": 1.0,
-  "avg_latency_ms": 20.74418738562645,
-  "p95_latency_ms": 36.74420015886426,
+  "avg_latency_ms": 44.85708822402321,
+  "p95_latency_ms": 126.7518000677228,
   "by_category": {
     "pipeline": {
       "passed": 30,
@@ -107,7 +107,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 29.413599986582994,
+      "latency_ms": 116.75979988649487,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -134,7 +134,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 15.562399988994002,
+      "latency_ms": 46.25849984586239,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -161,7 +161,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.204399893060327,
+      "latency_ms": 51.05859995819628,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -188,7 +188,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 15.484499977901578,
+      "latency_ms": 43.94460003823042,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -215,7 +215,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 16.07059990055859,
+      "latency_ms": 44.53559988178313,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -242,7 +242,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 16.85289992019534,
+      "latency_ms": 55.90010015293956,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -269,7 +269,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 17.939599929377437,
+      "latency_ms": 40.26290006004274,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -296,7 +296,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 19.671800080686808,
+      "latency_ms": 41.08769982121885,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -323,7 +323,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 16.534999944269657,
+      "latency_ms": 41.008499916642904,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -350,7 +350,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 16.724100103601813,
+      "latency_ms": 40.650099981576204,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -377,7 +377,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 15.67580015398562,
+      "latency_ms": 38.933200063183904,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -404,7 +404,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 17.372400034219027,
+      "latency_ms": 36.27149993553758,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -431,7 +431,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 15.458500012755394,
+      "latency_ms": 36.06249997392297,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -458,7 +458,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 15.163999982178211,
+      "latency_ms": 37.688600132241845,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -485,7 +485,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 15.964499907568097,
+      "latency_ms": 37.30370011180639,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -512,7 +512,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 16.080299858003855,
+      "latency_ms": 33.495499985292554,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -539,7 +539,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 16.00730000063777,
+      "latency_ms": 37.932900013402104,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -566,7 +566,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 29.343700036406517,
+      "latency_ms": 37.60759998112917,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -593,7 +593,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 17.171999905258417,
+      "latency_ms": 37.35999995842576,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -620,7 +620,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 15.893100062385201,
+      "latency_ms": 35.47260002233088,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -647,7 +647,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 15.936300158500671,
+      "latency_ms": 33.01010001450777,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -674,7 +674,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 47.65859991312027,
+      "latency_ms": 36.25470004044473,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -701,7 +701,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.265799894928932,
+      "latency_ms": 37.93029999360442,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -728,7 +728,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.289099955931306,
+      "latency_ms": 38.130000000819564,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -755,7 +755,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.772000024095178,
+      "latency_ms": 36.134300054982305,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -782,7 +782,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.510700013488531,
+      "latency_ms": 35.09229980409145,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -809,7 +809,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.666700037196279,
+      "latency_ms": 35.834499867632985,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -836,7 +836,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 13.930700020864606,
+      "latency_ms": 36.45460004918277,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -863,7 +863,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.814799884334207,
+      "latency_ms": 35.95170006155968,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -890,7 +890,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.9940000846982,
+      "latency_ms": 34.99379986897111,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -917,7 +917,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 16.217099968343973,
+      "latency_ms": 41.19989997707307,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -944,7 +944,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 14.380100183188915,
+      "latency_ms": 34.74220004864037,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -971,7 +971,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 15.569400042295456,
+      "latency_ms": 33.65620016120374,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -998,7 +998,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 15.538000036031008,
+      "latency_ms": 34.52139999717474,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1025,7 +1025,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 14.854799956083298,
+      "latency_ms": 36.37290000915527,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1052,7 +1052,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 32.31309982948005,
+      "latency_ms": 39.28299993276596,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1079,7 +1079,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 19.47450009174645,
+      "latency_ms": 34.968100022524595,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1106,7 +1106,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 16.89279987476766,
+      "latency_ms": 33.22950005531311,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1133,7 +1133,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 18.02700012922287,
+      "latency_ms": 38.22229988873005,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1160,7 +1160,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 14.972500037401915,
+      "latency_ms": 37.19240007922053,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1187,7 +1187,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 14.491999987512827,
+      "latency_ms": 34.848100040107965,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1214,7 +1214,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 13.285200111567974,
+      "latency_ms": 33.93279993906617,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1241,7 +1241,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 16.154700191691518,
+      "latency_ms": 33.47450005821884,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1268,7 +1268,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 13.87059991247952,
+      "latency_ms": 35.526399966329336,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1295,7 +1295,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 14.174700016155839,
+      "latency_ms": 34.67660001479089,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1322,7 +1322,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 25.72069992311299,
+      "latency_ms": 52.908899961039424,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1339,7 +1339,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/checkout-core checkout-core delivery incident. Root cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Pending approval: action #16 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Use the highest-ranked evidence first and avoid asserting a root cause until job logs or repo context prove it. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Require service-owner review before merge or deployment."
+      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/infra-rollout infra-rollout delivery incident. Root cause: Terraform validation failed because the load balancer rule uses an unsupported argument.\n- Pending approval: action #49 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Use the highest-ranked evidence first and avoid asserting a root cause until job logs or repo context prove it. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Require service-owner review before merge or deployment."
     },
     {
       "id": "priority_workspace_02",
@@ -1349,7 +1349,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 17.497999826446176,
+      "latency_ms": 39.97949999757111,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1366,7 +1366,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/checkout-core checkout-core delivery incident. Root cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Pending approval: action #16 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command."
+      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/infra-rollout infra-rollout delivery incident. Root cause: Terraform validation failed because the load balancer rule uses an unsupported argument.\n- Pending approval: action #49 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820061 in stage setup, then compare it with pipeline 720061. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command."
     },
     {
       "id": "priority_workspace_03",
@@ -1376,7 +1376,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 17.345699947327375,
+      "latency_ms": 45.7309999037534,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1393,7 +1393,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/checkout-core checkout-core delivery incident. Root cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Pending approval: action #16 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command."
+      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/infra-rollout infra-rollout delivery incident. Root cause: Terraform validation failed because the load balancer rule uses an unsupported argument.\n- Pending approval: action #49 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820061 in stage setup, then compare it with pipeline 720061. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command."
     },
     {
       "id": "priority_workspace_04",
@@ -1403,7 +1403,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 17.2562999650836,
+      "latency_ms": 37.81659994274378,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1420,7 +1420,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/checkout-core checkout-core delivery incident. Root cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Pending approval: action #16 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command."
+      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/infra-rollout infra-rollout delivery incident. Root cause: Terraform validation failed because the load balancer rule uses an unsupported argument.\n- Pending approval: action #49 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820061 in stage setup, then compare it with pipeline 720061. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command."
     },
     {
       "id": "priority_workspace_05",
@@ -1430,7 +1430,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 19.218799890950322,
+      "latency_ms": 39.80650007724762,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1447,7 +1447,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/checkout-core checkout-core delivery incident. Root cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Pending approval: action #16 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command."
+      "answer": "Priority triage for all synced projects:\n- First risk: showcase/checkout-core at 96.0/100 critical. showcase/checkout-core has critical delivery risk at 96/100.\n- First pipeline failure: showcase/checkout-core pipeline #720010. Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Open incident: showcase/infra-rollout infra-rollout delivery incident. Root cause: Terraform validation failed because the load balancer rule uses an unsupported argument.\n- Pending approval: action #49 Pipeline failure detected for showcase/mobile-gateway.\n- Recommended order: handle critical risks and failed production-facing pipelines first, then approve or reject prepared actions.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820061 in stage setup, then compare it with pipeline 720061. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command."
     },
     {
       "id": "incident_checkout_01",
@@ -1457,7 +1457,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 14.84730001538992,
+      "latency_ms": 35.759099991992116,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1484,7 +1484,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 15.21009998396039,
+      "latency_ms": 37.344499956816435,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1511,7 +1511,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 14.809900196269155,
+      "latency_ms": 35.236600087955594,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1538,7 +1538,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 14.757399912923574,
+      "latency_ms": 35.00509983859956,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1565,7 +1565,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 29.47179996408522,
+      "latency_ms": 36.43639991059899,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1592,7 +1592,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 20.761399995535612,
+      "latency_ms": 35.192200215533376,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1619,7 +1619,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 15.562099870294333,
+      "latency_ms": 36.93019994534552,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1646,7 +1646,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 14.810899971053004,
+      "latency_ms": 32.883299980312586,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1673,7 +1673,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 16.557499999180436,
+      "latency_ms": 35.22219997830689,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1700,7 +1700,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 15.926799969747663,
+      "latency_ms": 34.918999997898936,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1727,7 +1727,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 15.800599940121174,
+      "latency_ms": 39.32460001669824,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1744,7 +1744,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "actions_checkout_02",
@@ -1754,7 +1754,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 15.951699810102582,
+      "latency_ms": 38.17770001478493,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1771,7 +1771,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "actions_checkout_03",
@@ -1781,7 +1781,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 16.689399955794215,
+      "latency_ms": 36.582799861207604,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1798,7 +1798,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "actions_checkout_04",
@@ -1808,7 +1808,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 14.407100155949593,
+      "latency_ms": 36.30740009248257,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1825,7 +1825,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "actions_checkout_05",
@@ -1835,7 +1835,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 14.232399873435497,
+      "latency_ms": 36.04749985970557,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1852,7 +1852,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "actions_workspace_01",
@@ -1862,7 +1862,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 20.1838999055326,
+      "latency_ms": 58.16299980506301,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1879,7 +1879,7 @@
       "project_resolved": true,
       "prepared_action_count": 10,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #16 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 1, 2, 3, 4, 5, 6, 7, 8, 9, 10. They require approval in the Actions page before execution."
+      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #49 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820061 in stage setup, then compare it with pipeline 720061. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 42, 41, 38, 39, 40, 36, 35, 34, 37, 43. They require approval in the Actions page before execution."
     },
     {
       "id": "actions_workspace_02",
@@ -1889,7 +1889,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 19.425800070166588,
+      "latency_ms": 47.83529997803271,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1906,7 +1906,7 @@
       "project_resolved": true,
       "prepared_action_count": 10,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #16 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 1, 2, 3, 4, 5, 6, 7, 8, 9, 10. They require approval in the Actions page before execution."
+      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #49 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820061 in stage setup, then compare it with pipeline 720061. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 42, 41, 38, 39, 40, 36, 35, 34, 37, 43. They require approval in the Actions page before execution."
     },
     {
       "id": "actions_workspace_03",
@@ -1916,7 +1916,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 21.8684000428766,
+      "latency_ms": 47.43739985860884,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1933,7 +1933,7 @@
       "project_resolved": true,
       "prepared_action_count": 10,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #16 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 1, 2, 3, 4, 5, 6, 7, 8, 9, 10. They require approval in the Actions page before execution."
+      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #49 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820061 in stage setup, then compare it with pipeline 720061. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 42, 41, 38, 39, 40, 36, 35, 34, 37, 43. They require approval in the Actions page before execution."
     },
     {
       "id": "actions_workspace_04",
@@ -1943,7 +1943,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 22.2267999779433,
+      "latency_ms": 46.5363000985235,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1960,7 +1960,7 @@
       "project_resolved": true,
       "prepared_action_count": 10,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #16 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 1, 2, 3, 4, 5, 6, 7, 8, 9, 10. They require approval in the Actions page before execution."
+      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #49 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820061 in stage setup, then compare it with pipeline 720061. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 42, 41, 38, 39, 40, 36, 35, 34, 37, 43. They require approval in the Actions page before execution."
     },
     {
       "id": "actions_workspace_05",
@@ -1970,7 +1970,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 19.130299799144268,
+      "latency_ms": 46.61369998939335,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1987,7 +1987,7 @@
       "project_resolved": true,
       "prepared_action_count": 10,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #16 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 1, 2, 3, 4, 5, 6, 7, 8, 9, 10. They require approval in the Actions page before execution."
+      "answer": "Action status for all synced projects:\n- Recent action statuses: {'pending_approval': 12}\n- Latest action: #49 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (88% confidence): For the selected workspace, the recommendation is grounded in 12 evidence item(s). Start with job 820061 in stage setup, then compare it with pipeline 720061. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Open the failed GitLab job or pipeline log and verify the first failing command.\n- Prepared action proposal(s): 42, 41, 38, 39, 40, 36, 35, 34, 37, 43. They require approval in the Actions page before execution."
     },
     {
       "id": "fix_plan_checkout_01",
@@ -1997,7 +1997,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 50.21149991080165,
+      "latency_ms": 147.1351000946015,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2014,7 +2014,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #7: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #16: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_checkout_02",
@@ -2024,7 +2024,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 57.14230006560683,
+      "latency_ms": 125.49829995259643,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2041,7 +2041,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #8: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #17: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_checkout_03",
@@ -2051,7 +2051,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 35.67760018631816,
+      "latency_ms": 126.92459998652339,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2068,7 +2068,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #9: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #18: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_checkout_04",
@@ -2078,7 +2078,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 37.78270003385842,
+      "latency_ms": 127.90680001489818,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2095,7 +2095,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, tests/test_checkout_payment.py, .gitlab-ci.yml. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, tests/test_checkout_payment.py, .gitlab-ci.yml.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #10: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, tests/test_checkout_payment.py, .gitlab-ci.yml. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, tests/test_checkout_payment.py, .gitlab-ci.yml.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #19: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_checkout_05",
@@ -2105,7 +2105,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 36.74420015886426,
+      "latency_ms": 129.1749000083655,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2122,7 +2122,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #11: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #20: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_01",
@@ -2132,7 +2132,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 34.45739997550845,
+      "latency_ms": 126.7518000677228,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2149,7 +2149,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): tests/test_invoice_contract.py, .gitlab-ci.yml, workers/billing/events.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: tests/test_invoice_contract.py, .gitlab-ci.yml, workers/billing/events.py.\n- Prepared action proposal(s): 3, 4. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #12: Add regression test scaffold for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-test_scaffold-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): tests/test_invoice_contract.py, .gitlab-ci.yml, workers/billing/events.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: tests/test_invoice_contract.py, .gitlab-ci.yml, workers/billing/events.py.\n- Prepared action proposal(s): 36, 37. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #21: Add regression test scaffold for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-test_scaffold-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_02",
@@ -2159,7 +2159,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 34.56729999743402,
+      "latency_ms": 120.7269998267293,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2176,7 +2176,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #13: Document CI retry and failure guidance for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-ci_retry_guidance-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #22: Prepare generic source-code change for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-generic_code_change-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_03",
@@ -2186,7 +2186,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 36.21169994585216,
+      "latency_ms": 123.16980003379285,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2203,7 +2203,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #14: Stabilize failing pipeline timeout for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-pipeline_timeout-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #23: Stabilize failing pipeline timeout for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_04",
@@ -2213,7 +2213,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 36.98729979805648,
+      "latency_ms": 128.59530001878738,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2230,7 +2230,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): workers/billing/events.py, tests/test_invoice_contract.py, .gitlab-ci.yml. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: workers/billing/events.py, tests/test_invoice_contract.py, .gitlab-ci.yml.\n- Prepared action proposal(s): 3, 4. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #15: Document CI retry and failure guidance for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-ci_retry_guidance-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): workers/billing/events.py, tests/test_invoice_contract.py, .gitlab-ci.yml. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: workers/billing/events.py, tests/test_invoice_contract.py, .gitlab-ci.yml.\n- Prepared action proposal(s): 36, 37. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #24: Prepare generic source-code change for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-generic_code_change-20260610082227, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_05",
@@ -2240,7 +2240,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 251.67019991204143,
+      "latency_ms": 129.42059990018606,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2257,7 +2257,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #16: Stabilize failing pipeline timeout for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-pipeline_timeout-20260608155150, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #25: Stabilize failing pipeline timeout for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-pipeline_timeout-20260610082227, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "memory_checkout_01",
@@ -2267,7 +2267,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 21.190400002524257,
+      "latency_ms": 32.549999887123704,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2294,7 +2294,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 16.645900206640363,
+      "latency_ms": 37.042299984022975,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2321,7 +2321,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 19.250200130045414,
+      "latency_ms": 34.59339984692633,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2348,7 +2348,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 16.668800031766295,
+      "latency_ms": 36.69729991815984,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2375,7 +2375,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 15.286799985915422,
+      "latency_ms": 37.13700012303889,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2402,7 +2402,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 15.44280000962317,
+      "latency_ms": 37.144500063732266,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2429,7 +2429,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 14.245100086554885,
+      "latency_ms": 34.012800082564354,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2456,7 +2456,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 14.500000048428774,
+      "latency_ms": 34.446500008925796,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2483,7 +2483,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 14.833899913355708,
+      "latency_ms": 35.37900000810623,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2510,7 +2510,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 15.047899913042784,
+      "latency_ms": 32.581400126218796,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2537,7 +2537,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 13.600199948996305,
+      "latency_ms": 31.574400141835213,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2564,7 +2564,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 13.838999904692173,
+      "latency_ms": 30.668299878016114,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2591,7 +2591,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 13.879899866878986,
+      "latency_ms": 29.951700009405613,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2618,7 +2618,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 14.735100092366338,
+      "latency_ms": 29.337999876588583,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2645,7 +2645,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 13.110199943184853,
+      "latency_ms": 28.71739980764687,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2672,7 +2672,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 15.142600052058697,
+      "latency_ms": 33.311800099909306,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2689,7 +2689,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "security_live_action_block_02",
@@ -2699,7 +2699,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 16.16640016436577,
+      "latency_ms": 31.98059997521341,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2716,7 +2716,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "security_live_action_block_03",
@@ -2726,7 +2726,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 15.815299935638905,
+      "latency_ms": 32.19329984858632,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2743,7 +2743,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "security_live_action_block_04",
@@ -2753,7 +2753,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 16.045399941504,
+      "latency_ms": 32.16740000061691,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2770,7 +2770,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "security_live_action_block_05",
@@ -2780,7 +2780,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 15.461999922990799,
+      "latency_ms": 33.40219985693693,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2797,7 +2797,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 0,
-      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #2 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 1, 2. They require approval in the Actions page before execution."
+      "answer": "Action status for showcase/checkout-core:\n- Recent action statuses: {'pending_approval': 2}\n- Latest action: #35 Pipeline failure detected, pending_approval, channel slack.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution."
     },
     {
       "id": "missing_evidence_mobile_root_cause_01",
@@ -2807,7 +2807,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.648800017312169,
+      "latency_ms": 29.490000102669,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2824,7 +2824,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Cannot determine a failed job or root cause because no failed pipeline, failed job trace, or failed pipeline insight is stored for this scope.\n- Next action: sync the latest GitLab pipeline jobs and failed job traces before naming a root cause or preparing a live action."
+      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Repository context to inspect: .gitlab-ci.yml, gateway/timeouts.py, tests/test_gateway_smoke.py, deploy/kubernetes/gateway.yaml.\n- Repository memory note: No repository context matched this question yet; refresh the repository index.\n- I do not need to stop at job traces here: the next answerable step is to inspect the indexed CI/deploy/source files above and compare them with the failed branch or MR.\n- Next action: refresh pipeline jobs if you need exact log proof, but use repository context now to identify likely affected files and prepare an approval-gated fix plan."
     },
     {
       "id": "missing_evidence_mobile_root_cause_02",
@@ -2834,7 +2834,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 13.923399848863482,
+      "latency_ms": 27.421300066635013,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2851,7 +2851,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Cannot determine a failed job or root cause because no failed pipeline, failed job trace, or failed pipeline insight is stored for this scope.\n- Next action: sync the latest GitLab pipeline jobs and failed job traces before naming a root cause or preparing a live action."
+      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Repository context to inspect: .gitlab-ci.yml, gateway/timeouts.py, tests/test_gateway_smoke.py, deploy/kubernetes/gateway.yaml.\n- Repository memory note: No repository context matched this question yet; refresh the repository index.\n- I do not need to stop at job traces here: the next answerable step is to inspect the indexed CI/deploy/source files above and compare them with the failed branch or MR.\n- Next action: refresh pipeline jobs if you need exact log proof, but use repository context now to identify likely affected files and prepare an approval-gated fix plan."
     },
     {
       "id": "missing_evidence_mobile_root_cause_03",
@@ -2861,7 +2861,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 14.267500024288893,
+      "latency_ms": 28.635700000450015,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2878,7 +2878,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Cannot determine a failed job or root cause because no failed pipeline, failed job trace, or failed pipeline insight is stored for this scope.\n- Next action: sync the latest GitLab pipeline jobs and failed job traces before naming a root cause or preparing a live action."
+      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Repository context to inspect: .gitlab-ci.yml, gateway/timeouts.py, tests/test_gateway_smoke.py, deploy/kubernetes/gateway.yaml.\n- Repository memory note: No repository context matched this question yet; refresh the repository index.\n- I do not need to stop at job traces here: the next answerable step is to inspect the indexed CI/deploy/source files above and compare them with the failed branch or MR.\n- Next action: refresh pipeline jobs if you need exact log proof, but use repository context now to identify likely affected files and prepare an approval-gated fix plan."
     },
     {
       "id": "missing_evidence_mobile_root_cause_04",
@@ -2888,7 +2888,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 15.398599905893207,
+      "latency_ms": 29.55490001477301,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2905,7 +2905,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Cannot determine a failed job or root cause because no failed pipeline, failed job trace, or failed pipeline insight is stored for this scope.\n- Next action: sync the latest GitLab pipeline jobs and failed job traces before naming a root cause or preparing a live action."
+      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Repository context to inspect: .gitlab-ci.yml, gateway/timeouts.py, tests/test_gateway_smoke.py, deploy/kubernetes/gateway.yaml.\n- Repository memory note: No repository context matched this question yet; refresh the repository index.\n- I do not need to stop at job traces here: the next answerable step is to inspect the indexed CI/deploy/source files above and compare them with the failed branch or MR.\n- Next action: refresh pipeline jobs if you need exact log proof, but use repository context now to identify likely affected files and prepare an approval-gated fix plan."
     },
     {
       "id": "missing_evidence_mobile_root_cause_05",
@@ -2915,7 +2915,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 13.504100032150745,
+      "latency_ms": 28.931499924510717,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2932,7 +2932,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 0,
-      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Cannot determine a failed job or root cause because no failed pipeline, failed job trace, or failed pipeline insight is stored for this scope.\n- Next action: sync the latest GitLab pipeline jobs and failed job traces before naming a root cause or preparing a live action."
+      "answer": "Pipeline analysis for showcase/mobile-gateway:\n- Latest synced pipeline #720080 is success on ref feature/gateway-timeouts.\n- Repository context to inspect: .gitlab-ci.yml, gateway/timeouts.py, tests/test_gateway_smoke.py, deploy/kubernetes/gateway.yaml.\n- Repository memory note: No repository context matched this question yet; refresh the repository index.\n- I do not need to stop at job traces here: the next answerable step is to inspect the indexed CI/deploy/source files above and compare them with the failed branch or MR.\n- Next action: refresh pipeline jobs if you need exact log proof, but use repository context now to identify likely affected files and prepare an approval-gated fix plan."
     },
     {
       "id": "onboarding_product_usage_01",
@@ -2942,7 +2942,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 17.584800021722913,
+      "latency_ms": 33.215299947187304,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2969,7 +2969,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 18.581199925392866,
+      "latency_ms": 32.75869996286929,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2996,7 +2996,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 17.85169984214008,
+      "latency_ms": 37.5798000022769,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3023,7 +3023,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 18.255299888551235,
+      "latency_ms": 31.567600090056658,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3050,7 +3050,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 19.88350017927587,
+      "latency_ms": 31.548500061035156,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3077,7 +3077,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 17.29380013421178,
+      "latency_ms": 33.929700031876564,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3104,7 +3104,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 16.56760019250214,
+      "latency_ms": 31.95899981074035,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3131,7 +3131,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 18.046400044113398,
+      "latency_ms": 35.10500001721084,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3158,7 +3158,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 19.810699857771397,
+      "latency_ms": 30.989699997007847,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3185,7 +3185,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 17.538199899718165,
+      "latency_ms": 32.576699974015355,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3212,7 +3212,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 17.065299907699227,
+      "latency_ms": 31.547300051897764,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3239,7 +3239,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 14.090999960899353,
+      "latency_ms": 30.831200070679188,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3266,7 +3266,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 14.639500062912703,
+      "latency_ms": 30.298100085929036,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3293,7 +3293,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 14.930000063031912,
+      "latency_ms": 30.436099972575903,
       "checks": {
         "intent": true,
         "project_resolved": true,

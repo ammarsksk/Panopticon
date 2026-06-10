@@ -12,6 +12,7 @@ from app import models
 from app.services.agent_memory import AgentMemoryService
 from app.services.grounded_recommendations import GroundedRecommendationEngine
 from app.services.oauth import gitlab_client_for_workspace
+from app.services.repo_context import _draft_patch_suggestion
 
 
 SAFE_FIX_TYPES = {
@@ -20,6 +21,12 @@ SAFE_FIX_TYPES = {
     "deployment_healthcheck",
     "rollback_runbook",
     "ci_retry_guidance",
+    "source_validation",
+    "source_logging",
+    "source_bug_fix",
+    "documentation_update",
+    "config_validation",
+    "generic_code_change",
 }
 TERMINAL_STATUSES = {"rejected", "mr_opened", "dry_run_mr_ready"}
 
@@ -120,6 +127,7 @@ class FixPlanService:
         plan.status = "approved"
         plan.updated_at = _now()
         self._record_decision(plan, decision="approved", actor=actor, reason=reason)
+        self._audit(plan, "fix_plan.approved", actor=actor, reason=reason)
         AgentMemoryService(self.db, workspace_id=self.workspace_id).remember_fix_plan_decision(
             plan,
             decision="approved",
@@ -136,6 +144,7 @@ class FixPlanService:
         plan.status = "rejected"
         plan.updated_at = _now()
         self._record_decision(plan, decision="rejected", actor=actor, reason=reason)
+        self._audit(plan, "fix_plan.rejected", actor=actor, reason=reason)
         AgentMemoryService(self.db, workspace_id=self.workspace_id).remember_fix_plan_decision(
             plan,
             decision="rejected",
@@ -164,6 +173,7 @@ class FixPlanService:
         plan.last_result = {"branch": branch_result, "commit": commit_result}
         plan.error = ""
         plan.updated_at = _now()
+        self._audit(plan, "fix_plan.branch_created", actor="system", reason=plan.status)
         self.db.commit()
         return plan
 
@@ -186,6 +196,7 @@ class FixPlanService:
         plan.last_result = {**(plan.last_result or {}), "merge_request": result}
         plan.error = ""
         plan.updated_at = _now()
+        self._audit(plan, "fix_plan.merge_request_opened", actor="system", reason=plan.status)
         self.db.commit()
         return plan
 
@@ -200,6 +211,25 @@ class FixPlanService:
         self.db.add(approval)
         self.db.flush()
         return approval
+
+    def _audit(self, plan: models.FixPlan, event_type: str, *, actor: str, reason: str = "") -> None:
+        self.db.add(
+            models.AuditLog(
+                workspace_id=plan.workspace_id or self.workspace_id,
+                user_id=None,
+                event_type=event_type,
+                target_type="fix_plan",
+                target_id=str(plan.id),
+                metadata_json={
+                    "actor": actor,
+                    "reason": reason,
+                    "status": plan.status,
+                    "fix_type": plan.fix_type,
+                    "project_path": plan.project_path,
+                },
+            )
+        )
+        self.db.flush()
 
     def _resolve_project(self, *, project_id: int | None, project_path: str) -> models.GitLabProject | None:
         if project_id:
@@ -292,7 +322,7 @@ def _plan_payload(
     slug = _slug(f"{fix_type}-{source_type or 'manual'}-{source_id or project.id}")
     runbook_path = f"docs/panopticon/{slug}.md"
     guidance_path = f".gitlab/merge_request_templates/panopticon-{slug}.md"
-    files = [
+    support_files = [
         {
             "path": runbook_path,
             "commit_action": "create",
@@ -306,7 +336,8 @@ def _plan_payload(
             "content": _mr_template_content(project, fix_type, evidence, actions, grounded),
         },
     ]
-    files.extend(_repo_patch_files(project, fix_type, repo_files))
+    repo_patch_files = _repo_patch_files(project, fix_type, repo_files, problem_statement=problem_statement or _summary(source, ""))
+    files = [*repo_patch_files, *support_files]
     diff_preview = [_diff_for_change(file_change, repo_files) for file_change in files]
     test_plan = _test_plan(repo_files, fix_type)
     validation = _validation(files, branch_name, base_branch, project.default_branch or "main", evidence_bundle, test_plan)
@@ -480,7 +511,13 @@ def _validate_safe_path(path: str) -> None:
         raise ValueError(f"Unsafe file path is not allowed: {path}")
 
 
-def _repo_patch_files(project: models.GitLabProject, fix_type: str, repo_files: list[models.RepoFileIndex]) -> list[dict[str, str]]:
+def _repo_patch_files(
+    project: models.GitLabProject,
+    fix_type: str,
+    repo_files: list[models.RepoFileIndex],
+    *,
+    problem_statement: str = "",
+) -> list[dict[str, str]]:
     if fix_type in {"pipeline_timeout", "ci_retry_guidance"}:
         ci = _find_repo_file(repo_files, ".gitlab-ci.yml")
         if ci:
@@ -518,6 +555,58 @@ def _repo_patch_files(project: models.GitLabProject, fix_type: str, repo_files: 
                     "content": _test_scaffold_content(project, source),
                 }
             ]
+    if fix_type in {"source_validation", "source_logging", "source_bug_fix", "generic_code_change"}:
+        source = _find_source_for_problem(repo_files, problem_statement) or _find_first_type(repo_files, "source")
+        if source:
+            if fix_type == "source_logging":
+                instructions = "add diagnostic logging"
+            elif fix_type == "source_bug_fix":
+                instructions = problem_statement or "fix the failing source-code bug"
+            elif fix_type == "generic_code_change":
+                instructions = problem_statement or "make a small reviewable code change"
+            else:
+                instructions = "add input validation guard"
+            suggestion = _draft_patch_suggestion(source.content_excerpt, file_path=source.file_path, instructions=instructions)
+            return [
+                {
+                    "path": source.file_path,
+                    "commit_action": "update",
+                    "purpose": "Apply the reviewable source-code change requested through the agent.",
+                    "content": str(suggestion.get("proposed_content") or source.content_excerpt),
+                }
+            ]
+    if fix_type == "documentation_update":
+        docs = _find_first_type(repo_files, "docs") or _find_repo_file(repo_files, "README.md")
+        if docs:
+            suggestion = _draft_patch_suggestion(docs.content_excerpt, file_path=docs.file_path, instructions="document the requested behavior and validation steps")
+            return [
+                {
+                    "path": docs.file_path,
+                    "commit_action": "update",
+                    "purpose": "Update project documentation with requested implementation and validation guidance.",
+                    "content": str(suggestion.get("proposed_content") or docs.content_excerpt),
+                }
+            ]
+        return [
+            {
+                "path": "docs/panopticon/change-notes.md",
+                "commit_action": "create",
+                "purpose": "Create documentation for the requested code-change plan.",
+                "content": "# Panopticon change notes\n\n- Requested change: document behavior, validation, owner, and rollback path before merge.\n",
+            }
+        ]
+    if fix_type == "config_validation":
+        config = _find_first_type(repo_files, "config") or _find_first_type(repo_files, "dependency")
+        if config:
+            suggestion = _draft_patch_suggestion(config.content_excerpt, file_path=config.file_path, instructions="add config validation guidance")
+            return [
+                {
+                    "path": config.file_path,
+                    "commit_action": "update",
+                    "purpose": "Add a reviewable configuration validation note tied to the indexed config file.",
+                    "content": str(suggestion.get("proposed_content") or config.content_excerpt),
+                }
+            ]
     return []
 
 
@@ -529,13 +618,121 @@ def _find_first_type(repo_files: list[models.RepoFileIndex], file_type: str) -> 
     return next((item for item in repo_files if item.file_type == file_type), None)
 
 
+def _find_source_for_problem(repo_files: list[models.RepoFileIndex], problem_statement: str) -> models.RepoFileIndex | None:
+    source_files = [item for item in repo_files if item.file_type == "source"]
+    if not source_files:
+        return None
+    terms = {term for term in re.findall(r"[a-zA-Z0-9_]{3,}", problem_statement.lower()) if term not in {"the", "and", "for", "with", "from", "this", "that", "code", "change", "fix"}}
+    if not terms:
+        return source_files[0]
+
+    def score(item: models.RepoFileIndex) -> tuple[int, int]:
+        haystack = f"{item.file_path}\n{item.content_excerpt}".lower()
+        direct_hits = sum(1 for term in terms if term in haystack)
+        path_hits = sum(1 for term in terms if term in item.file_path.lower())
+        return (direct_hits + path_hits * 2, -len(item.file_path))
+
+    scored = sorted(source_files, key=score, reverse=True)
+    return scored[0] if score(scored[0])[0] > 0 else source_files[0]
+
+
 def _patch_ci_timeout(content: str) -> str:
     base = content.rstrip()
-    if "timeout:" not in base:
-        base = _append_once(base, "\n\n# Panopticon safety: keep CI waits bounded while investigating dependency latency.\ntimeout: 20m\n")
-    if "retry:" not in base:
-        base = _append_once(base, "\n# Panopticon safety: retry only transient runner/system failures, not deterministic test failures.\nretry:\n  max: 1\n  when:\n    - runner_system_failure\n    - stuck_or_timeout_failure\n")
-    return base + "\n"
+    patched = _patch_gitlab_ci_job(base)
+    if patched:
+        return patched
+    return _append_once(
+        base,
+        "\n\n# Panopticon safety: identify the failing job, then add a job-level timeout and retry policy there.\n"
+        "# Example:\n"
+        "#   timeout: 20m\n"
+        "#   retry:\n"
+        "#     max: 1\n"
+        "#     when:\n"
+        "#       - runner_system_failure\n"
+        "#       - stuck_or_timeout_failure\n",
+    ) + "\n"
+
+
+def _patch_gitlab_ci_job(content: str) -> str:
+    lines = content.splitlines()
+    blocks = _top_level_yaml_blocks(lines)
+    candidates = []
+    for index, block in enumerate(blocks):
+        name = block["name"]
+        block_lines = lines[block["start"] : block["end"]]
+        block_text = "\n".join(block_lines).lower()
+        if name in _GITLAB_CI_RESERVED_KEYS:
+            continue
+        if not any(line.startswith(("  script:", "  rules:", "  stage:")) for line in block_lines):
+            continue
+        score = 0
+        if "deploy" in name or "release" in name:
+            score += 4
+        if any(term in block_text for term in ["kubectl", "helm", "rollout", "deploy", "environment:"]):
+            score += 3
+        if "timeout" in block_text or "stuck_or_timeout_failure" in block_text:
+            score -= 2
+        candidates.append((score, index, block))
+    if not candidates:
+        return ""
+
+    _score, _index, target = sorted(candidates, key=lambda item: (-item[0], item[1]))[0]
+    start = target["start"]
+    end = target["end"]
+    block_lines = lines[start:end]
+    block_text = "\n".join(block_lines)
+    insert_lines: list[str] = []
+    if not re.search(r"(?m)^  timeout:\s*", block_text):
+        insert_lines.extend(
+            [
+                "  # Panopticon safety: bound long waits while preserving reviewer visibility.",
+                "  timeout: 20m",
+            ]
+        )
+    if not re.search(r"(?m)^  retry:\s*", block_text):
+        insert_lines.extend(
+            [
+                "  # Panopticon safety: retry only transient runner/system failures.",
+                "  retry:",
+                "    max: 1",
+                "    when:",
+                "      - runner_system_failure",
+                "      - stuck_or_timeout_failure",
+            ]
+        )
+    if not insert_lines:
+        return content.rstrip() + "\n"
+    patched_lines = [*lines[: start + 1], *insert_lines, *lines[start + 1 :]]
+    return "\n".join(patched_lines).rstrip() + "\n"
+
+
+def _top_level_yaml_blocks(lines: list[str]) -> list[dict[str, Any]]:
+    starts: list[tuple[int, str]] = []
+    for index, line in enumerate(lines):
+        match = re.match(r"^([A-Za-z0-9_.-]+):(?:\s*#.*)?\s*$", line)
+        if match:
+            starts.append((index, match.group(1).lower()))
+    blocks = []
+    for index, (start, name) in enumerate(starts):
+        end = starts[index + 1][0] if index + 1 < len(starts) else len(lines)
+        blocks.append({"name": name, "start": start, "end": end})
+    return blocks
+
+
+_GITLAB_CI_RESERVED_KEYS = {
+    "after_script",
+    "before_script",
+    "cache",
+    "default",
+    "image",
+    "include",
+    "pages",
+    "services",
+    "stages",
+    "variables",
+    "workflow",
+}
 
 
 def _append_once(content: str, addition: str) -> str:
@@ -676,12 +873,24 @@ def _fix_type(requested: str, source, problem_statement: str) -> str:
     text = f"{problem_statement} {_summary(source, '')}".lower()
     if "timeout" in text or "timed out" in text:
         return "pipeline_timeout"
+    if "bug" in text or "failing test" in text or "wrong result" in text or "discount" in text or "coupon" in text:
+        return "source_bug_fix"
     if "test" in text or "coverage" in text:
         return "test_scaffold"
+    if "log" in text or "observability" in text or "instrument" in text:
+        return "source_logging"
+    if "validation" in text or "validate" in text or "guard" in text or "input" in text:
+        return "source_validation"
+    if "readme" in text or "document" in text or "docs" in text:
+        return "documentation_update"
+    if "config" in text or "setting" in text or "dependency" in text:
+        return "config_validation"
     if "deployment" in text or "readiness" in text or "health" in text:
         return "deployment_healthcheck"
     if "rollback" in text or "incident" in text:
         return "rollback_runbook"
+    if "code" in text or "change" in text or "patch" in text or "fix" in text or "refactor" in text:
+        return "generic_code_change"
     return "ci_retry_guidance"
 
 
@@ -692,6 +901,8 @@ def _intent_for_fix_type(fix_type: str) -> str:
         return "risk"
     if fix_type == "test_scaffold":
         return "risk"
+    if fix_type in {"source_validation", "source_logging", "source_bug_fix", "documentation_update", "config_validation", "generic_code_change"}:
+        return "summary"
     return "summary"
 
 
@@ -702,6 +913,12 @@ def _title(fix_type: str, project_path: str) -> str:
         "deployment_healthcheck": "Improve deployment health validation",
         "rollback_runbook": "Document rollback and incident response",
         "ci_retry_guidance": "Document CI retry and failure guidance",
+        "source_validation": "Add source-code validation guard",
+        "source_logging": "Add source-code diagnostic logging",
+        "source_bug_fix": "Fix source-code bug",
+        "documentation_update": "Update project documentation",
+        "config_validation": "Add configuration validation guidance",
+        "generic_code_change": "Prepare generic source-code change",
     }
     return f"{labels.get(fix_type, 'Operational fix')} for {project_path}"
 

@@ -17,7 +17,7 @@ export default async function ChatPage() {
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-5">
-          <Link href="/" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
+          <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
             <ArrowLeft size={16} />
             Dashboard
           </Link>

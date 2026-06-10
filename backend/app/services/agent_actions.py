@@ -61,6 +61,7 @@ class AgentActionService:
         action.status = "approved"
         action.updated_at = _now()
         self._record_decision(action, decision="approved", actor=actor, reason=reason)
+        self._audit(action, "action.approved", actor=actor, reason=reason)
         AgentMemoryService(self.db, workspace_id=self.workspace_id).remember_action_decision(
             action,
             decision="approved",
@@ -77,6 +78,7 @@ class AgentActionService:
         action.status = "rejected"
         action.updated_at = _now()
         self._record_decision(action, decision="rejected", actor=actor, reason=reason)
+        self._audit(action, "action.rejected", actor=actor, reason=reason)
         AgentMemoryService(self.db, workspace_id=self.workspace_id).remember_action_decision(
             action,
             decision="rejected",
@@ -103,6 +105,7 @@ class AgentActionService:
         action.status = str(result.get("status", "sent"))
         action.error = str(result.get("error", ""))
         action.updated_at = _now()
+        self._audit(action, "action.executed", actor="system", reason=action.error)
         self.db.commit()
         return action
 
@@ -123,6 +126,26 @@ class AgentActionService:
         self.db.add(approval)
         self.db.flush()
         return approval
+
+    def _audit(self, action: models.AgentAction, event_type: str, *, actor: str, reason: str = "") -> None:
+        self.db.add(
+            models.AuditLog(
+                workspace_id=action.workspace_id or self.workspace_id,
+                user_id=None,
+                event_type=event_type,
+                target_type="agent_action",
+                target_id=str(action.id),
+                metadata_json={
+                    "actor": actor,
+                    "reason": reason,
+                    "status": action.status,
+                    "channel": action.channel,
+                    "action_type": action.action_type,
+                    "project_path": action.project_path,
+                },
+            )
+        )
+        self.db.flush()
 
     def _execution_context(self, recommendation: models.Recommendation) -> dict:
         if recommendation.channel != "gitlab_comment":

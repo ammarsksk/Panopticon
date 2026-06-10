@@ -77,6 +77,51 @@ class AgentToolService:
                 {"project_id": "integer", "project_path": "string", "query": "string", "limit": "integer"},
             ),
             _tool(
+                "list_project_tree",
+                "List the indexed repository tree for a project from database memory.",
+                {"project_id": "integer", "project_path": "string", "limit": "integer"},
+            ),
+            _tool(
+                "read_repo_file",
+                "Read one redacted indexed repository file from database memory.",
+                {"project_id": "integer", "project_path": "string", "file_path": "string"},
+            ),
+            _tool(
+                "read_repo_file_range",
+                "Read a line range from one redacted indexed repository file.",
+                {"project_id": "integer", "project_path": "string", "file_path": "string", "start_line": "integer", "end_line": "integer"},
+            ),
+            _tool(
+                "search_code",
+                "Search indexed repository code chunks using keyword/vector-style repository memory.",
+                {"project_id": "integer", "project_path": "string", "query": "string", "limit": "integer"},
+            ),
+            _tool(
+                "grep_code",
+                "Search indexed repository code chunks for exact text or identifiers.",
+                {"project_id": "integer", "project_path": "string", "query": "string", "limit": "integer"},
+            ),
+            _tool(
+                "get_symbols",
+                "Find indexed functions, classes, and configuration keys.",
+                {"project_id": "integer", "project_path": "string", "query": "string", "limit": "integer"},
+            ),
+            _tool(
+                "find_related_files",
+                "Rank files related to a question using file paths, code chunks, symbols, and extracted signals.",
+                {"project_id": "integer", "project_path": "string", "query": "string", "limit": "integer"},
+            ),
+            _tool(
+                "build_context_pack",
+                "Build a repository context pack for chat reasoning, including files, chunks, symbols, and notes.",
+                {"project_id": "integer", "project_path": "string", "query": "string", "limit": "integer"},
+            ),
+            _tool(
+                "draft_patch",
+                "Draft a safe patch suggestion from indexed file context. This never writes to GitLab.",
+                {"project_id": "integer", "project_path": "string", "file_path": "string", "instructions": "string"},
+            ),
+            _tool(
                 "generate_grounded_recommendation",
                 "Generate an evidence-backed recommendation from risks, pipelines, repository files, incidents, and memory.",
                 {"project_id": "integer", "project_path": "string", "question": "string", "intent": "string", "persist": "string"},
@@ -179,6 +224,66 @@ class AgentToolService:
             return self.priority_context(limit=limit)
         if name == "search_repo_context":
             return self.repo_context(project=project, query=str(args.get("query") or ""), limit=limit)
+        if name == "list_project_tree":
+            if not project:
+                raise LookupError("Project is required")
+            return {"project": _project(project), "tree": RepoContextService(self.db, workspace_id=self.workspace_id).list_tree(project, limit=limit)}
+        if name == "read_repo_file":
+            if not project:
+                raise LookupError("Project is required")
+            file_path = str(args.get("file_path") or "")
+            if not file_path:
+                raise LookupError("file_path is required")
+            content = RepoContextService(self.db, workspace_id=self.workspace_id).read_file(project, file_path=file_path)
+            return {"project": _project(project), "file": _record("repo_file_contents", content) if content else None}
+        if name == "read_repo_file_range":
+            if not project:
+                raise LookupError("Project is required")
+            file_path = str(args.get("file_path") or "")
+            if not file_path:
+                raise LookupError("file_path is required")
+            return RepoContextService(self.db, workspace_id=self.workspace_id).read_file_range(
+                project,
+                file_path=file_path,
+                start_line=int(args.get("start_line") or 1),
+                end_line=int(args.get("end_line") or 120),
+            )
+        if name in {"search_code", "grep_code"}:
+            service = RepoContextService(self.db, workspace_id=self.workspace_id)
+            return {
+                "project": _project(project) if project else None,
+                "chunks": [_record("repo_code_chunks", item) for item in service.search_chunks(project=project, query=str(args.get("query") or ""), limit=limit)],
+            }
+        if name == "get_symbols":
+            service = RepoContextService(self.db, workspace_id=self.workspace_id)
+            return {
+                "project": _project(project) if project else None,
+                "symbols": [_record("repo_symbol_indexes", item) for item in service.symbols(project=project, query=str(args.get("query") or ""), limit=limit)],
+            }
+        if name == "find_related_files":
+            if not project:
+                raise LookupError("Project is required")
+            service = RepoContextService(self.db, workspace_id=self.workspace_id)
+            return {"project": _project(project), "files": [_record("repo_files", item) for item in service.related_files(project, query=str(args.get("query") or ""), limit=limit)]}
+        if name == "build_context_pack":
+            service = RepoContextService(self.db, workspace_id=self.workspace_id)
+            pack = service.context_pack(project, query=str(args.get("query") or ""), limit=limit)
+            return {
+                "query": pack["query"],
+                "project_path": pack["project_path"],
+                "files": [_record("repo_files", item) for item in pack["files"]],
+                "chunks": [_record("repo_code_chunks", item) for item in pack["chunks"]],
+                "symbols": [_record("repo_symbol_indexes", item) for item in pack["symbols"]],
+                "notes": pack["notes"],
+            }
+        if name == "draft_patch":
+            if not project:
+                raise LookupError("Project is required")
+            return RepoContextService(self.db, workspace_id=self.workspace_id).draft_patch(
+                project,
+                file_path=str(args.get("file_path") or ""),
+                instructions=str(args.get("instructions") or ""),
+            )
         if name == "generate_grounded_recommendation":
             engine = GroundedRecommendationEngine(self.db, workspace_id=self.workspace_id)
             if str(args.get("persist") or "").lower() in {"1", "true", "yes"}:
@@ -252,6 +357,8 @@ class AgentToolService:
             "incident_correlations": self._records(models.IncidentCorrelation, project_path, desc(models.IncidentCorrelation.updated_at), limit),
             "metric_snapshots": self._records(models.EngineeringMetricSnapshot, project_path, desc(models.EngineeringMetricSnapshot.snapshot_date), limit),
             "repo_files": self._records(models.RepoFileIndex, project_path, desc(models.RepoFileIndex.indexed_at), limit),
+            "repo_chunks": self._records(models.RepoCodeChunk, project_path, desc(models.RepoCodeChunk.indexed_at), limit),
+            "repo_symbols": self._records(models.RepoSymbolIndex, project_path, desc(models.RepoSymbolIndex.indexed_at), limit),
             "memory": self._records(models.MemoryRecord, project_path, desc(models.MemoryRecord.created_at), limit),
         }
 
@@ -296,6 +403,8 @@ class AgentToolService:
             "incident_correlations": [_record("incident_correlations", item) for item in self._records(models.IncidentCorrelation, project_path, desc(models.IncidentCorrelation.updated_at), limit)],
             "metric_snapshots": [_record("engineering_metric_snapshots", item) for item in self._records(models.EngineeringMetricSnapshot, project_path, desc(models.EngineeringMetricSnapshot.snapshot_date), limit)],
             "repo_files": [_record("repo_files", item) for item in self._records(models.RepoFileIndex, project_path, desc(models.RepoFileIndex.indexed_at), limit)],
+            "repo_chunks": [_record("repo_code_chunks", item) for item in self._records(models.RepoCodeChunk, project_path, desc(models.RepoCodeChunk.indexed_at), limit)],
+            "repo_symbols": [_record("repo_symbol_indexes", item) for item in self._records(models.RepoSymbolIndex, project_path, desc(models.RepoSymbolIndex.indexed_at), limit)],
             "memory": [_record("memory", item) for item in self._records(models.MemoryRecord, project_path, desc(models.MemoryRecord.created_at), limit)],
         }
 
@@ -531,6 +640,22 @@ def _record(kind: str, record: Any) -> dict[str, Any]:
         "content_sha",
         "last_commit_id",
         "content_excerpt",
+        "repo_file_index_id",
+        "content_text",
+        "line_count",
+        "is_truncated",
+        "chunk_index",
+        "start_line",
+        "end_line",
+        "content",
+        "token_estimate",
+        "embedding_model",
+        "embedding_provider",
+        "embedding_status",
+        "embedding_error",
+        "symbol_name",
+        "symbol_type",
+        "signature",
         "memory_type",
         "signature",
     ]:
@@ -552,6 +677,10 @@ def _record(kind: str, record: Any) -> dict[str, Any]:
         "related_incident_ids",
         "metrics",
         "signals",
+        "redaction_summary",
+        "keywords",
+        "embedding",
+        "metadata_json",
     ]:
         if hasattr(record, json_field):
             data[json_field] = getattr(record, json_field)

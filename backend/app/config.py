@@ -27,6 +27,16 @@ def _csv_env(name: str, default: list[str]) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _dev_origins(origins: list[str], *, app_env: str) -> list[str]:
+    if app_env.lower() == "production":
+        return origins
+    extra = []
+    for host in ("localhost", "127.0.0.1"):
+        for port in range(3000, 3006):
+            extra.append(f"http://{host}:{port}")
+    return sorted(set(origins + extra))
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = "Panopticon"
@@ -40,7 +50,15 @@ class Settings:
     db_pool_timeout: int = 30
     db_connect_timeout: int = 10
     auth_required: bool = False
+    csrf_required: bool = False
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: int = 60
+    rate_limit_login_per_window: int = 12
+    rate_limit_signup_per_window: int = 8
+    rate_limit_chat_per_window: int = 40
+    rate_limit_tool_per_window: int = 60
     session_cookie_name: str = "panopticon_session"
+    csrf_cookie_name: str = "panopticon_csrf"
     session_ttl_hours: int = 168
     default_workspace_slug: str = "local-dev"
     agent_runtime_token: str = ""
@@ -75,6 +93,13 @@ class Settings:
     repo_index_on_sync: bool = True
     repo_index_file_limit: int = 80
     repo_index_max_file_bytes: int = 20000
+    repo_index_chunk_chars: int = 2800
+    repo_index_max_chunks_per_file: int = 24
+    repo_embedding_provider: str = "local"
+    repo_embedding_model: str = "local-keyword-v1"
+    repo_embedding_dimensions: int = 768
+    repo_embedding_fallback_to_local: bool = True
+    repo_pgvector_enabled: bool = False
     gemini_enabled: bool = False
     gemini_model: str = "gemini-2.5-pro"
     gemini_api_key: str = ""
@@ -125,10 +150,20 @@ class Settings:
             missing.append("GOOGLE_GENAI_USE_VERTEXAI=true")
         if not self.google_cloud_project:
             missing.append("GOOGLE_CLOUD_PROJECT")
+        if self.repo_embedding_provider != "vertex":
+            missing.append("REPO_EMBEDDING_PROVIDER=vertex")
+        if self.repo_embedding_model != "gemini-embedding-001":
+            missing.append("REPO_EMBEDDING_MODEL=gemini-embedding-001")
+        if not self.repo_pgvector_enabled:
+            missing.append("REPO_PGVECTOR_ENABLED=true")
         if not self.allowed_origins or any(origin == "*" for origin in self.allowed_origins):
             missing.append("ALLOWED_ORIGINS must be explicit in production")
         if not self.auth_required:
             missing.append("AUTH_REQUIRED=true")
+        if not self.csrf_required:
+            missing.append("CSRF_REQUIRED=true")
+        if not self.rate_limit_enabled:
+            missing.append("RATE_LIMIT_ENABLED=true")
         if not self.agent_runtime_token:
             missing.append("AGENT_RUNTIME_TOKEN")
         if missing:
@@ -139,19 +174,32 @@ class Settings:
 def get_settings() -> Settings:
     env_path = Path(__file__).resolve().parents[1] / ".env"
     load_dotenv(env_path)
+    app_env = os.getenv("APP_ENV", "development")
+    allowed_origins = _dev_origins(
+        _csv_env("ALLOWED_ORIGINS", ["http://localhost:3000", "http://127.0.0.1:3000"]),
+        app_env=app_env,
+    )
     return Settings(
         app_name=os.getenv("APP_NAME", "Panopticon"),
-        app_env=os.getenv("APP_ENV", "development"),
+        app_env=app_env,
         app_api_url=os.getenv("APP_API_URL", "http://localhost:8000"),
         app_public_url=os.getenv("APP_PUBLIC_URL", "http://localhost:3000"),
         database_url=os.getenv("DATABASE_URL", "sqlite:///./panopticon.db"),
-        allowed_origins=_csv_env("ALLOWED_ORIGINS", ["http://localhost:3000", "http://127.0.0.1:3000"]),
+        allowed_origins=allowed_origins,
         db_pool_size=_int_env("DB_POOL_SIZE", 5),
         db_max_overflow=_int_env("DB_MAX_OVERFLOW", 10),
         db_pool_timeout=_int_env("DB_POOL_TIMEOUT", 30),
         db_connect_timeout=_int_env("DB_CONNECT_TIMEOUT", 10),
         auth_required=_bool_env("AUTH_REQUIRED", False),
+        csrf_required=_bool_env("CSRF_REQUIRED", _bool_env("AUTH_REQUIRED", False)),
+        rate_limit_enabled=_bool_env("RATE_LIMIT_ENABLED", app_env.lower() == "production"),
+        rate_limit_window_seconds=_int_env("RATE_LIMIT_WINDOW_SECONDS", 60),
+        rate_limit_login_per_window=_int_env("RATE_LIMIT_LOGIN_PER_WINDOW", 12),
+        rate_limit_signup_per_window=_int_env("RATE_LIMIT_SIGNUP_PER_WINDOW", 8),
+        rate_limit_chat_per_window=_int_env("RATE_LIMIT_CHAT_PER_WINDOW", 40),
+        rate_limit_tool_per_window=_int_env("RATE_LIMIT_TOOL_PER_WINDOW", 60),
         session_cookie_name=os.getenv("SESSION_COOKIE_NAME", "panopticon_session"),
+        csrf_cookie_name=os.getenv("CSRF_COOKIE_NAME", "panopticon_csrf"),
         session_ttl_hours=_int_env("SESSION_TTL_HOURS", 168),
         default_workspace_slug=os.getenv("DEFAULT_WORKSPACE_SLUG", "local-dev"),
         agent_runtime_token=os.getenv("AGENT_RUNTIME_TOKEN", ""),
@@ -186,6 +234,13 @@ def get_settings() -> Settings:
         repo_index_on_sync=_bool_env("REPO_INDEX_ON_SYNC", True),
         repo_index_file_limit=_int_env("REPO_INDEX_FILE_LIMIT", 80),
         repo_index_max_file_bytes=_int_env("REPO_INDEX_MAX_FILE_BYTES", 20000),
+        repo_index_chunk_chars=_int_env("REPO_INDEX_CHUNK_CHARS", 2800),
+        repo_index_max_chunks_per_file=_int_env("REPO_INDEX_MAX_CHUNKS_PER_FILE", 24),
+        repo_embedding_provider=os.getenv("REPO_EMBEDDING_PROVIDER", "local").strip().lower() or "local",
+        repo_embedding_model=os.getenv("REPO_EMBEDDING_MODEL", "local-keyword-v1"),
+        repo_embedding_dimensions=_int_env("REPO_EMBEDDING_DIMENSIONS", 768),
+        repo_embedding_fallback_to_local=_bool_env("REPO_EMBEDDING_FALLBACK_TO_LOCAL", True),
+        repo_pgvector_enabled=_bool_env("REPO_PGVECTOR_ENABLED", False),
         gemini_enabled=_bool_env("GEMINI_ENABLED", False),
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-pro"),
         gemini_api_key=os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", ""),

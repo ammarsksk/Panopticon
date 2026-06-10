@@ -13,7 +13,7 @@ from app.config import get_settings
 from app.database import get_db
 
 
-PBKDF2_ITERATIONS = 210_000
+PBKDF2_ITERATIONS = 320_000
 SESSION_COOKIE_SAMESITE = "lax"
 
 
@@ -96,6 +96,7 @@ class AuthService:
         workspace = self.db.get(models.Workspace, membership.workspace_id)
         if not workspace:
             raise PermissionError("workspace not found")
+        self.revoke_user_sessions(user_id=user.id)
         session, raw_token = self.create_session(user=user, workspace=workspace)
         self.audit(workspace_id=workspace.id, user_id=user.id, event_type="auth.login", target_type="user", target_id=str(user.id))
         self.db.commit()
@@ -121,6 +122,15 @@ class AuthService:
         self.db.add(session)
         self.db.flush()
         return session, raw_token
+
+    def revoke_user_sessions(self, *, user_id: int) -> None:
+        timestamp = now()
+        self.db.execute(
+            update(models.UserSession)
+            .where(models.UserSession.user_id == user_id)
+            .where(models.UserSession.revoked_at.is_(None))
+            .values(revoked_at=timestamp)
+        )
 
     def context_from_token(self, token: str) -> RequestContext | None:
         session = self.db.scalar(select(models.UserSession).where(models.UserSession.token_hash == token_hash(token)))
@@ -239,13 +249,18 @@ def set_session_cookie(response: Response, token: str) -> None:
         max_age=settings.session_ttl_hours * 3600,
         httponly=True,
         secure=settings.is_production,
-        samesite=SESSION_COOKIE_SAMESITE,
+        samesite=session_cookie_samesite(settings),
     )
 
 
 def clear_session_cookie(response: Response) -> None:
     settings = get_settings()
-    response.delete_cookie(key=settings.session_cookie_name, httponly=True, secure=settings.is_production, samesite=SESSION_COOKIE_SAMESITE)
+    response.delete_cookie(key=settings.session_cookie_name, httponly=True, secure=settings.is_production, samesite=session_cookie_samesite(settings))
+
+
+def session_cookie_samesite(settings=None) -> str:
+    current_settings = settings or get_settings()
+    return "none" if current_settings.is_production else SESSION_COOKIE_SAMESITE
 
 
 def workspace_filter(model, workspace_id: int):
@@ -258,9 +273,71 @@ def assign_workspace(record, workspace_id: int):
 
 
 def attach_unscoped_records(db: Session, workspace_id: int) -> None:
+    claimed_keys = _existing_scoped_keys(db, workspace_id)
     for model in SCOPED_MODELS:
-        db.execute(update(model).where(model.workspace_id.is_(None)).values(workspace_id=workspace_id))
+        for record in db.scalars(select(model).where(model.workspace_id.is_(None)).limit(500)).all():
+            keys = _record_conflict_keys(record)
+            if keys and any(key in claimed_keys for key in keys):
+                continue
+            if not keys and _would_conflict_with_scoped_record(db, record, workspace_id):
+                continue
+            record.workspace_id = workspace_id
+            claimed_keys.update(keys)
     db.commit()
+
+
+def _existing_scoped_keys(db: Session, workspace_id: int) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    for project in db.scalars(select(models.GitLabProject).where(models.GitLabProject.workspace_id == workspace_id)).all():
+        keys.update(_record_conflict_keys(project))
+    for file_record in db.scalars(select(models.RepoFileIndex).where(models.RepoFileIndex.workspace_id == workspace_id)).all():
+        keys.update(_record_conflict_keys(file_record))
+    return keys
+
+
+def _record_conflict_keys(record) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    if isinstance(record, models.GitLabProject):
+        gitlab_project_id = str(record.gitlab_project_id or "").strip()
+        project_path = str(record.project_path or "").strip()
+        if gitlab_project_id:
+            keys.add(("gitlab_project_id", gitlab_project_id))
+        if project_path:
+            keys.add(("gitlab_project_path", project_path))
+    elif isinstance(record, models.RepoFileIndex):
+        project_path = str(record.project_path or "").strip()
+        file_path = str(record.file_path or "").strip()
+        ref = str(record.ref or "").strip()
+        if project_path and file_path and ref:
+            keys.add(("repo_file", f"{project_path}:{file_path}:{ref}"))
+    return keys
+
+
+def _would_conflict_with_scoped_record(db: Session, record, workspace_id: int) -> bool:
+    if isinstance(record, models.GitLabProject):
+        return bool(
+            db.scalar(
+                select(models.GitLabProject)
+                .where(models.GitLabProject.workspace_id == workspace_id)
+                .where(
+                    (models.GitLabProject.gitlab_project_id == record.gitlab_project_id)
+                    | (models.GitLabProject.project_path == record.project_path)
+                )
+                .limit(1)
+            )
+        )
+    if isinstance(record, models.RepoFileIndex):
+        return bool(
+            db.scalar(
+                select(models.RepoFileIndex)
+                .where(models.RepoFileIndex.workspace_id == workspace_id)
+                .where(models.RepoFileIndex.project_path == record.project_path)
+                .where(models.RepoFileIndex.file_path == record.file_path)
+                .where(models.RepoFileIndex.ref == record.ref)
+                .limit(1)
+            )
+        )
+    return False
 
 
 def hash_password(password: str) -> str:

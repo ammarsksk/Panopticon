@@ -169,7 +169,10 @@ export function DashboardExperience({ data }: { data: DashboardData }) {
               <RadioTower size={18} aria-hidden="true" />
               Live operations console
             </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-normal">Panopticon</h1>
+            <div className="mt-2 flex items-center gap-3">
+              <img src="/panopticon-logo.png" alt="" width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
+              <h1 className="text-2xl font-semibold tracking-normal">Panopticon</h1>
+            </div>
             <p className="mt-1 text-sm text-slate-600">GitLab delivery risk, incidents, actions, and AI recommendations in one place.</p>
           </div>
 

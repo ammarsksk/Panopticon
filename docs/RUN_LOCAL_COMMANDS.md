@@ -2,6 +2,21 @@
 
 Run these from PowerShell.
 
+## 0. Restart Everything
+
+This clears the backend/frontend ports, runs migrations, starts both services in the background, and writes logs to `logs\`.
+
+```powershell
+cd C:\Users\LENOVO\Downloads\Panopticon
+.\scripts\restart_local.ps1
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
 ## 1. Start Backend
 
 ```powershell
