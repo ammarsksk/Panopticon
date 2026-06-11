@@ -136,6 +136,12 @@ Panopticon's agent loop is tool-first and evidence-first:
 9. Store useful memory for future questions.
 ```
 
+### Model Context Protocol (MCP) Integration
+
+Panopticon leverages the **Model Context Protocol (MCP)** to equip AI reasoning agents with native tool access to your GitLab workspace. By standardizing communication through an MCP server, the chatbot and remediation agents can query issues, inspect repository files, create commits, and trigger pipeline events securely and dynamically.
+> [!NOTE]
+> Integrating via MCP allows AI models (like Claude or Gemini) to interact directly with GitLab APIs using a standard, secure toolset, reducing integration overhead and enabling rich, multi-file code operations.
+
 ### MCP-Style Tools
 
 The backend exposes workspace-scoped tools for the agent runtime and chat layer:
