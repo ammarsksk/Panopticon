@@ -468,4 +468,4 @@ That is the difference between a chatbot demo and a production-grade agentic dev
 
 ## License
 
-See `LICENSE`.
+This product has been licensed under the **Apache-2.0 License**. For further details, Please view the `LICENSE` file.
