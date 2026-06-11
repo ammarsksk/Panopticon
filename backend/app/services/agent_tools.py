@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.services.agent_actions import AgentActionService
-from app.services.agent_memory import AgentMemoryService
+from app.services.agent_memory import AgentMemoryService, is_stale_failure_memory
 from app.services.fix_plans import FixPlanService
 from app.services.gitlab_sync import GitLabProjectSyncService
 from app.services.grounded_recommendations import GroundedRecommendationEngine
@@ -539,7 +539,10 @@ class AgentToolService:
             stmt = stmt.where(model.project_path == project_path)
         for filter_expr in filters:
             stmt = stmt.where(filter_expr)
-        return self.db.scalars(stmt.order_by(order_by).limit(limit)).all()
+        records = self.db.scalars(stmt.order_by(order_by).limit(limit)).all()
+        if model is models.MemoryRecord:
+            records = [record for record in records if not is_stale_failure_memory(record)]
+        return records
 
     def _scoped(self, stmt, model):
         if self.workspace_id is not None and hasattr(model, "workspace_id"):

@@ -1,7 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowLeft, Bot, CheckCircle2, FileCode2, GitBranch, GitCommitHorizontal, ShieldCheck } from "lucide-react";
 import { FixPlan, getFixPlans, getProjectsData } from "@/lib/api";
-import { redirectIfUnauthorized } from "../authRedirect";
+import { ProtectedClientPage } from "../ProtectedClientPage";
 import { FixPlanControls, NewFixPlanForm } from "./FixPlanControls";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
@@ -322,49 +324,45 @@ function PlanCard({ plan }: { plan: FixPlan }) {
   );
 }
 
-export default async function FixPlansPage() {
-  let data;
-  try {
-    data = await Promise.all([getProjectsData(), getFixPlans()]);
-  } catch (error) {
-    redirectIfUnauthorized(error);
-  }
-  const [{ projects }, plans] = data;
-
+export default function FixPlansPage() {
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
-          <div>
-            <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
-              <ArrowLeft size={16} />
-              Dashboard
-            </Link>
-            <div className="flex items-center gap-2">
-              <Bot className="text-teal-700" size={24} />
-              <h1 className="text-2xl font-semibold">Safe Fix Plans</h1>
+    <ProtectedClientPage load={() => Promise.all([getProjectsData(), getFixPlans()])} title="Opening fix plans">
+      {([{ projects }, plans]) => (
+        <main className="min-h-screen bg-slate-50 text-slate-950">
+          <header className="border-b border-slate-200 bg-white">
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
+              <div>
+                <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
+                  <ArrowLeft size={16} />
+                  Dashboard
+                </Link>
+                <div className="flex items-center gap-2">
+                  <Bot className="text-teal-700" size={24} />
+                  <h1 className="text-2xl font-semibold">Safe Fix Plans</h1>
+                </div>
+                <p className="mt-1 text-sm text-slate-600">Generate, approve, and dry-run GitLab branch/MR fixes before anything touches a repository.</p>
+              </div>
+              <div className="text-sm text-slate-600">{plans.length} plan{plans.length === 1 ? "" : "s"}</div>
             </div>
-            <p className="mt-1 text-sm text-slate-600">Generate, approve, and dry-run GitLab branch/MR fixes before anything touches a repository.</p>
-          </div>
-          <div className="text-sm text-slate-600">{plans.length} plan{plans.length === 1 ? "" : "s"}</div>
-        </div>
-      </header>
+          </header>
 
-      <div className="mx-auto max-w-7xl space-y-4 px-6 py-6">
-        <NewFixPlanForm projects={projects} />
+          <div className="mx-auto max-w-7xl space-y-4 px-6 py-6">
+            <NewFixPlanForm projects={projects} />
 
-        {plans.length ? (
-          <div className="space-y-3">
-            {plans.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} />
-            ))}
+            {plans.length ? (
+              <div className="space-y-3">
+                {plans.map((plan) => (
+                  <PlanCard key={plan.id} plan={plan} />
+                ))}
+              </div>
+            ) : (
+              <div className="border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+                No fix plans yet. Create one from a synced project to review the planned files and approval flow.
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-            No fix plans yet. Create one from a synced project to review the planned files and approval flow.
-          </div>
-        )}
-      </div>
-    </main>
+        </main>
+      )}
+    </ProtectedClientPage>
   );
 }

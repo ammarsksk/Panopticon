@@ -34,6 +34,9 @@ class ChatValidationService:
         errors: list[str] = []
         warnings: list[str] = []
 
+        if _is_failure_notice(redacted):
+            return ChatValidationResult(answer=fallback, errors=errors, warnings=["Live model response was replaced with grounded fallback."], used_fallback=True)
+
         if _claims_external_write(redacted) and _only_has_proposals(context, prepared_actions, prepared_fix_plans):
             errors.append("Answer claimed a Slack/GitLab/code write even though only approval-gated proposals exist.")
 
@@ -134,7 +137,19 @@ def _ensure_complete(answer: str) -> str:
 
 
 def _is_failure_notice(answer: str) -> bool:
-    return "Gemini is configured" in answer or "Gemini live reasoning failed" in answer
+    lowered = answer.lower()
+    return (
+        "gemini is configured" in lowered
+        or "gemini live reasoning failed" in lowered
+        or "gemini returned an incomplete answer" in lowered
+        or "please ask again; the backend will retry" in lowered
+        or "did not show it as the final response" in lowered
+        or "did not use the deterministic fallback" in lowered
+    )
+
+
+def contains_failure_notice(answer: str) -> bool:
+    return _is_failure_notice(answer)
 
 
 def _redact_secret_text(value: str | None) -> str:

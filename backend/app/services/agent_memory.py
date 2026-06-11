@@ -8,6 +8,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.services.chat_validation import contains_failure_notice
 
 
 MEMORY_TYPES = {
@@ -64,7 +65,7 @@ class AgentMemoryService:
             stmt = stmt.where(models.MemoryRecord.project_path == "")
         fetched = self.db.scalars(stmt.order_by(desc(models.MemoryRecord.created_at)).limit(50)).all()
         records.extend(fetched)
-        return _rank_memory(_dedupe(records), question=question)[:limit]
+        return _rank_memory([record for record in _dedupe(records) if not is_stale_failure_memory(record)], question=question)[:limit]
 
     def remember_prepared_fix_plan(self, plan: models.FixPlan) -> models.MemoryRecord:
         return self._upsert_memory(
@@ -104,6 +105,8 @@ class AgentMemoryService:
         if intent not in {"pipeline_failure", "incident", "risk"}:
             return None
         if not evidence_labels:
+            return None
+        if contains_failure_notice(answer):
             return None
         memory_type = {
             "pipeline_failure": "failure_signature_memory",
@@ -145,6 +148,13 @@ class AgentMemoryService:
         self.db.add(record)
         self.db.flush()
         return record
+
+
+def is_stale_failure_memory(record: models.MemoryRecord) -> bool:
+    values = [record.summary or ""]
+    values.extend(record.evidence or [])
+    values.extend(record.remediation or [])
+    return any(contains_failure_notice(value) for value in values)
 
 
 def _rank_memory(records: list[models.MemoryRecord], *, question: str) -> list[models.MemoryRecord]:

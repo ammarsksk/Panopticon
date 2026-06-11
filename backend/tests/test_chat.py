@@ -5,10 +5,14 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.agents.gemini import GeminiReasoner
+from app.config import get_settings
 from app.database import Base, get_db
 from app.main import app
 from app.models import ChatMessage, ChatThread, GitLabProject, MemoryRecord, MergeRequestSnapshot, PipelineInsight, PipelineSnapshot, Recommendation, RiskAssessment
 from app.scripts.seed_demo import seed_rich_demo
+from app.services.agent_memory import AgentMemoryService
+from app.services.agent_tools import AgentToolService
+from app.services.auth import AuthService
 
 
 def _session():
@@ -86,12 +90,222 @@ def _seed_project_context(db):
     return project
 
 
+def _client_for_db(db):
+    def override_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_db
+    return TestClient(app)
+
+
+def test_chat_history_replaces_stale_gemini_failure_notice():
+    db = _session()
+    context = AuthService(db).local_dev_context()
+    thread = ChatThread(workspace_id=context.workspace.id, project_id=None, project_path="", title="bad stale response")
+    db.add(thread)
+    db.flush()
+    stale = ChatMessage(
+        workspace_id=context.workspace.id,
+        thread_id=thread.id,
+        role="assistant",
+        content="Gemini returned an incomplete answer, so I did not show it as the final response. Please ask again; the backend will retry the live model call.",
+        citations=[],
+        prepared_action_ids=[],
+    )
+    db.add(stale)
+    db.commit()
+    client = _client_for_db(db)
+    try:
+        response = client.get(f"/api/chat/threads/{thread.id}")
+        assert response.status_code == 200
+        payload = response.json()
+        assert "Gemini returned an incomplete answer" not in payload[0]["content"]
+        assert "older incomplete Gemini response was removed" in payload[0]["content"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_memory_api_hides_stale_gemini_failure_notice():
+    db = _session()
+    context = AuthService(db).local_dev_context()
+    memory = MemoryRecord(
+        workspace_id=context.workspace.id,
+        project_path="demo/checkout-service",
+        memory_type="failure_signature_memory",
+        signature="bad-gemini-notice",
+        summary="Gemini returned an incomplete answer, so I did not show it as the final response. Please ask again; the backend will retry the live model call.",
+        evidence=["pipeline:9001", "Gemini live reasoning failed: timeout"],
+        remediation=["Please ask again; the backend will retry the live model call."],
+    )
+    db.add(memory)
+    db.commit()
+    client = _client_for_db(db)
+    try:
+        response = client.get("/api/memory")
+        assert response.status_code == 200
+        payload = response.json()
+        assert "Gemini returned an incomplete answer" not in str(payload)
+        assert "Gemini live reasoning failed" not in str(payload)
+        assert payload[0]["summary"].startswith("This stale incomplete Gemini memory was hidden")
+        assert payload[0]["evidence"] == ["pipeline:9001"]
+        assert payload[0]["remediation"] == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_agent_memory_and_tools_skip_stale_gemini_failure_notice():
+    db = _session()
+    context = AuthService(db).local_dev_context()
+    project = _seed_project_context(db)
+    db.add(
+        MemoryRecord(
+            workspace_id=context.workspace.id,
+            project_path=project.project_path,
+            memory_type="failure_signature_memory",
+            signature="bad-gemini-notice",
+            summary="Gemini returned an incomplete answer, so I did not show it as the final response.",
+            evidence=["pipeline:9001"],
+            remediation=[],
+        )
+    )
+    db.commit()
+
+    memory = AgentMemoryService(db, workspace_id=context.workspace.id).retrieve(project=project, question="why did the pipeline fail?")
+    tool_context = AgentToolService(db, workspace_id=context.workspace.id).chat_context(project)
+
+    assert all("Gemini returned an incomplete answer" not in item.summary for item in memory)
+    assert all("Gemini returned an incomplete answer" not in item.summary for item in tool_context["memory"])
+
+
+def test_agent_memory_does_not_store_failure_notice_answer_pattern():
+    db = _session()
+    context = AuthService(db).local_dev_context()
+    created = AgentMemoryService(db, workspace_id=context.workspace.id).remember_answer_pattern(
+        project_path="demo/checkout-service",
+        intent="pipeline_failure",
+        answer="Gemini returned an incomplete answer, so I did not show it as the final response.",
+        evidence_labels=["pipeline:9001"],
+    )
+
+    assert created is None
+    assert db.query(MemoryRecord).count() == 0
+
+
+def test_clear_chat_history_deletes_threads_and_messages():
+    db = _session()
+    context = AuthService(db).local_dev_context()
+    thread = ChatThread(workspace_id=context.workspace.id, project_id=None, project_path="", title="delete me")
+    db.add(thread)
+    db.flush()
+    db.add_all(
+        [
+            ChatMessage(workspace_id=context.workspace.id, thread_id=thread.id, role="user", content="hello", citations=[], prepared_action_ids=[]),
+            ChatMessage(workspace_id=context.workspace.id, thread_id=thread.id, role="assistant", content="answer", citations=[], prepared_action_ids=[]),
+        ]
+    )
+    db.commit()
+    client = _client_for_db(db)
+    try:
+        response = client.post("/api/chat/threads/clear")
+        assert response.status_code == 200
+        assert response.json() == {"deleted_threads": 1, "deleted_messages": 2}
+        assert db.query(ChatThread).count() == 0
+        assert db.query(ChatMessage).count() == 0
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_memory_records_can_be_updated_and_deleted():
+    db = _session()
+    context = AuthService(db).local_dev_context()
+    memory = MemoryRecord(
+        workspace_id=context.workspace.id,
+        project_path="demo/checkout-service",
+        memory_type="answer_pattern_memory",
+        signature="old",
+        summary="Old summary",
+        evidence=["old evidence"],
+        remediation=["old remediation"],
+    )
+    db.add(memory)
+    db.commit()
+    client = _client_for_db(db)
+    try:
+        update_response = client.patch(
+            f"/api/memory/{memory.id}",
+            json={
+                "summary": "New summary",
+                "evidence": ["new evidence"],
+                "remediation": ["new remediation"],
+            },
+        )
+        assert update_response.status_code == 200
+        assert update_response.json()["summary"] == "New summary"
+        assert update_response.json()["evidence"] == ["new evidence"]
+
+        delete_response = client.delete(f"/api/memory/{memory.id}")
+        assert delete_response.status_code == 200
+        assert delete_response.json()["deleted"] is True
+        assert db.query(MemoryRecord).count() == 0
+    finally:
+        app.dependency_overrides.clear()
+
+
 def _use_deterministic_chat(monkeypatch):
     monkeypatch.setattr(
         GeminiReasoner,
         "chat_answer",
         lambda self, *, question, intent, subject, evidence, deterministic_draft: deterministic_draft,
     )
+
+
+def test_gemini_chat_uses_grounded_fallback_for_incomplete_live_answer(monkeypatch):
+    monkeypatch.setenv("GEMINI_ENABLED", "true")
+    get_settings.cache_clear()
+
+    calls = {"count": 0}
+
+    def fake_generate(self, *, task, prompt, context, max_output_tokens=1200):
+        calls["count"] += 1
+        return "Pipeline failed because"
+
+    monkeypatch.setattr(GeminiReasoner, "_generate_live", fake_generate)
+    try:
+        answer = GeminiReasoner().chat_answer(
+            question="Make a table of every failing area.",
+            intent="pipeline_failure",
+            subject="demo/project",
+            evidence=[],
+            deterministic_draft="| Area | Status |\n| --- | --- |\n| Pipeline | failed |\n\nUse the fix plan before approval.",
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert answer.startswith("| Area | Status |")
+    assert "Gemini returned an incomplete answer" not in answer
+    assert calls["count"] == 2
+
+
+def test_gemini_chat_uses_grounded_fallback_for_live_failure(monkeypatch):
+    monkeypatch.setenv("GEMINI_ENABLED", "true")
+    get_settings.cache_clear()
+    monkeypatch.setattr(GeminiReasoner, "_generate_live", lambda self, **kwargs: "Gemini live reasoning failed: timeout")
+    try:
+        answer = GeminiReasoner().chat_answer(
+            question="Why did CI fail?",
+            intent="pipeline_failure",
+            subject="demo/project",
+            evidence=[],
+            deterministic_draft="Pipeline analysis for demo/project: inspect the failed job log.",
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert answer == "Pipeline analysis for demo/project: inspect the failed job log."
+    assert "did not use the deterministic fallback" not in answer
 
 
 def test_chat_answers_from_project_context_and_cites_records(monkeypatch):
@@ -151,6 +365,43 @@ def test_chat_routes_pipeline_questions_to_pipeline_answer(monkeypatch):
     assert "test job timed out" in answer
     assert "Highest recent risk" not in answer
     assert {citation["type"] for citation in citations} <= {"pipeline_insights", "failed_jobs", "pipelines"}
+
+
+def test_chat_replaces_incomplete_gemini_notice_with_grounded_table(monkeypatch):
+    monkeypatch.setattr(
+        GeminiReasoner,
+        "chat_answer",
+        lambda self, *, question, intent, subject, evidence, deterministic_draft: (
+            "Gemini returned an incomplete answer, so I did not show it as the final response. "
+            "Please ask again; the backend will retry the live model call."
+        ),
+    )
+    db = _session()
+    project = _seed_project_context(db)
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={
+                "project_id": project.id,
+                "message": "Make a table of every failing area, what file caused it, why it failed, and what code change Panopticon should make.",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+    assert response.status_code == 200
+    answer = response.json()["assistant_message"]["content"]
+    assert answer.startswith("Table view for demo/checkout-service:")
+    assert "| Area | Status | What went wrong | Evidence | Next step | Safety |" in answer
+    assert "Gemini returned an incomplete answer" not in answer
+    assert "Please ask again" not in answer
 
 
 def test_chat_routes_risk_questions_to_risk_answer(monkeypatch):
@@ -276,7 +527,7 @@ def test_chat_invokes_gemini_reasoner_with_focused_evidence(monkeypatch):
     assert any(item["type"] == "grounded_recommendation" for item in captured["evidence"])
 
 
-def test_chat_does_not_show_deterministic_answer_when_live_gemini_fails(monkeypatch):
+def test_chat_uses_grounded_answer_when_live_gemini_fails(monkeypatch):
     db = _session()
     project = _seed_project_context(db)
 
@@ -309,10 +560,10 @@ def test_chat_does_not_show_deterministic_answer_when_live_gemini_fails(monkeypa
 
     assert response.status_code == 200
     answer = response.json()["assistant_message"]["content"]
-    assert "Gemini is configured" in answer
-    assert "deterministic fallback" in answer
-    assert "Pipeline analysis" not in answer
-    assert "test job timed out" not in answer
+    assert "Gemini is configured" not in answer
+    assert "deterministic fallback" not in answer
+    assert "Pipeline analysis" in answer
+    assert "test job timed out" in answer
 
 
 def test_chat_repairs_incomplete_live_gemini_answer(monkeypatch):

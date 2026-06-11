@@ -630,6 +630,11 @@ class ChatResponseOut(BaseModel):
     prepared_fix_plans: list[FixPlanOut] = Field(default_factory=list)
 
 
+class ChatHistoryDeleteOut(BaseModel):
+    deleted_threads: int
+    deleted_messages: int
+
+
 class MemoryRecordOut(BaseModel):
     id: int
     project_path: str
@@ -641,6 +646,15 @@ class MemoryRecordOut(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MemoryRecordUpdateIn(BaseModel):
+    project_path: str | None = None
+    memory_type: str | None = None
+    signature: str | None = None
+    summary: str | None = None
+    evidence: list[str] | None = None
+    remediation: list[str] | None = None
 
 
 class ProjectSummaryOut(BaseModel):

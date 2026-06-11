@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowLeft, ExternalLink, GitBranch, GitCommit, GitPullRequest, History, Send, ShieldAlert } from "lucide-react";
 import { getProjectSummary, JobSnapshot, PipelineSnapshot, Recommendation, RepoFileIndex, Risk } from "@/lib/api";
-import { redirectIfUnauthorized } from "../../authRedirect";
+import { useParams } from "next/navigation";
+import { ProtectedClientPage } from "../../ProtectedClientPage";
 import { RepoIndexButton } from "./RepoIndexButton";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
@@ -218,19 +221,16 @@ function formatCounts(values: Record<string, number>) {
     .join(", ");
 }
 
-export default async function ProjectWorkspacePage({ params }: { params: Promise<{ projectId: string }> }) {
-  const { projectId } = await params;
-  let summary;
-  try {
-    summary = await getProjectSummary(projectId);
-  } catch (error) {
-    redirectIfUnauthorized(error);
-  }
-  const project = summary.project;
-  const showExternalLinks = Boolean(project.web_url) && !isDemoProject(project);
-
+export default function ProjectWorkspacePage() {
+  const params = useParams<{ projectId: string }>();
+  const projectId = params.projectId;
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
+    <ProtectedClientPage load={() => getProjectSummary(projectId)} title="Opening project workspace">
+      {(summary) => {
+        const project = summary.project;
+        const showExternalLinks = Boolean(project.web_url) && !isDemoProject(project);
+        return (
+          <main className="min-h-screen bg-slate-50 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-5">
           <Link href="/projects" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
@@ -451,6 +451,9 @@ export default async function ProjectWorkspacePage({ params }: { params: Promise
           </Section>
         </div>
       </div>
-    </main>
+          </main>
+        );
+      }}
+    </ProtectedClientPage>
   );
 }

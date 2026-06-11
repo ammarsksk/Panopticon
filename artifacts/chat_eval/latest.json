@@ -3,8 +3,8 @@
   "passed": 119,
   "failed": 0,
   "pass_rate": 1.0,
-  "avg_latency_ms": 44.85708822402321,
-  "p95_latency_ms": 126.7518000677228,
+  "avg_latency_ms": 51.91093781853424,
+  "p95_latency_ms": 130.12129999697208,
   "by_category": {
     "pipeline": {
       "passed": 30,
@@ -107,7 +107,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 116.75979988649487,
+      "latency_ms": 145.73989994823933,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -134,7 +134,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 46.25849984586239,
+      "latency_ms": 57.76160000823438,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -161,7 +161,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 51.05859995819628,
+      "latency_ms": 67.31289997696877,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -188,7 +188,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 43.94460003823042,
+      "latency_ms": 57.659899815917015,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -215,7 +215,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 44.53559988178313,
+      "latency_ms": 59.79450000450015,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -242,7 +242,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 55.90010015293956,
+      "latency_ms": 73.07580020278692,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -269,7 +269,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 40.26290006004274,
+      "latency_ms": 68.74949997290969,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -296,7 +296,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 41.08769982121885,
+      "latency_ms": 52.82429978251457,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -323,7 +323,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 41.008499916642904,
+      "latency_ms": 53.89040010049939,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -350,7 +350,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 40.650099981576204,
+      "latency_ms": 59.928700095042586,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -377,7 +377,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 38.933200063183904,
+      "latency_ms": 51.75370001234114,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -404,7 +404,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 36.27149993553758,
+      "latency_ms": 51.15079996176064,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -431,7 +431,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 36.06249997392297,
+      "latency_ms": 48.90419985167682,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -458,7 +458,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 37.688600132241845,
+      "latency_ms": 59.461900033056736,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -485,7 +485,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 37.30370011180639,
+      "latency_ms": 47.788199968636036,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -512,7 +512,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 33.495499985292554,
+      "latency_ms": 49.862299812957644,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -539,7 +539,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 37.932900013402104,
+      "latency_ms": 47.06600005738437,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -566,7 +566,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 37.60759998112917,
+      "latency_ms": 51.03640002198517,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -593,7 +593,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 37.35999995842576,
+      "latency_ms": 52.86309984512627,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -620,7 +620,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 35.47260002233088,
+      "latency_ms": 47.3344000056386,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -647,7 +647,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 33.01010001450777,
+      "latency_ms": 46.810900093987584,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -674,7 +674,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 36.25470004044473,
+      "latency_ms": 48.773600021377206,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -701,7 +701,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 37.93029999360442,
+      "latency_ms": 49.98279991559684,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -728,7 +728,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 38.130000000819564,
+      "latency_ms": 52.320499904453754,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -755,7 +755,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 36.134300054982305,
+      "latency_ms": 46.084499917924404,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -782,7 +782,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 35.09229980409145,
+      "latency_ms": 45.518599916249514,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -809,7 +809,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 35.834499867632985,
+      "latency_ms": 43.85919985361397,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -836,7 +836,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 36.45460004918277,
+      "latency_ms": 43.649200117215514,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -863,7 +863,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 35.95170006155968,
+      "latency_ms": 42.81489993445575,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -890,7 +890,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 34.99379986897111,
+      "latency_ms": 52.14609997346997,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -917,7 +917,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 41.19989997707307,
+      "latency_ms": 54.218299919739366,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -944,7 +944,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 34.74220004864037,
+      "latency_ms": 54.608399979770184,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -971,7 +971,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 33.65620016120374,
+      "latency_ms": 47.41770005784929,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -998,7 +998,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 34.52139999717474,
+      "latency_ms": 50.24480004794896,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1025,7 +1025,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 36.37290000915527,
+      "latency_ms": 50.41719996370375,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1052,7 +1052,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 39.28299993276596,
+      "latency_ms": 50.22019986063242,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1079,7 +1079,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 34.968100022524595,
+      "latency_ms": 40.75470007956028,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1106,7 +1106,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 33.22950005531311,
+      "latency_ms": 40.6657001003623,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1133,7 +1133,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 38.22229988873005,
+      "latency_ms": 38.8950000051409,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1160,7 +1160,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 37.19240007922053,
+      "latency_ms": 38.240599911659956,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1187,7 +1187,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 34.848100040107965,
+      "latency_ms": 33.56119990348816,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1214,7 +1214,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 33.93279993906617,
+      "latency_ms": 33.70909998193383,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1241,7 +1241,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 33.47450005821884,
+      "latency_ms": 34.31580006144941,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1268,7 +1268,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 35.526399966329336,
+      "latency_ms": 36.241100169718266,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1295,7 +1295,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 34.67660001479089,
+      "latency_ms": 36.440599942579865,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1322,7 +1322,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 52.908899961039424,
+      "latency_ms": 53.28490003012121,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1349,7 +1349,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 39.97949999757111,
+      "latency_ms": 42.2582000028342,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1376,7 +1376,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 45.7309999037534,
+      "latency_ms": 45.38989998400211,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1403,7 +1403,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 37.81659994274378,
+      "latency_ms": 39.37990008853376,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1430,7 +1430,7 @@
       "expected_intent": "priority",
       "actual_intent": "priority",
       "passed": true,
-      "latency_ms": 39.80650007724762,
+      "latency_ms": 42.47360001318157,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1457,7 +1457,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 35.759099991992116,
+      "latency_ms": 36.38679999858141,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1484,7 +1484,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 37.344499956816435,
+      "latency_ms": 38.145000115036964,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1511,7 +1511,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 35.236600087955594,
+      "latency_ms": 37.884100107476115,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1538,7 +1538,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 35.00509983859956,
+      "latency_ms": 38.16420002840459,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1565,7 +1565,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 36.43639991059899,
+      "latency_ms": 35.37519997917116,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1592,7 +1592,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 35.192200215533376,
+      "latency_ms": 32.394600100815296,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1619,7 +1619,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 36.93019994534552,
+      "latency_ms": 32.59700001217425,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1646,7 +1646,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 32.883299980312586,
+      "latency_ms": 30.957900220528245,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1673,7 +1673,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 35.22219997830689,
+      "latency_ms": 30.81249981187284,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1700,7 +1700,7 @@
       "expected_intent": "incident",
       "actual_intent": "incident",
       "passed": true,
-      "latency_ms": 34.918999997898936,
+      "latency_ms": 32.10390009917319,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1727,7 +1727,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 39.32460001669824,
+      "latency_ms": 37.004300160333514,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1754,7 +1754,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 38.17770001478493,
+      "latency_ms": 37.64720004983246,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1781,7 +1781,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 36.582799861207604,
+      "latency_ms": 35.55139992386103,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1808,7 +1808,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 36.30740009248257,
+      "latency_ms": 36.99719998985529,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1835,7 +1835,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 36.04749985970557,
+      "latency_ms": 33.89829979278147,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1862,7 +1862,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 58.16299980506301,
+      "latency_ms": 56.235000025480986,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1889,7 +1889,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 47.83529997803271,
+      "latency_ms": 43.10900019481778,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1916,7 +1916,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 47.43739985860884,
+      "latency_ms": 48.76859998330474,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1943,7 +1943,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 46.5363000985235,
+      "latency_ms": 44.81280012987554,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1970,7 +1970,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 46.61369998939335,
+      "latency_ms": 45.212400145828724,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -1997,7 +1997,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 147.1351000946015,
+      "latency_ms": 153.6035998724401,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2014,7 +2014,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #16: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, services/checkout/auth.py, tests/test_checkout_payment.py.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #55: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610221124, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_checkout_02",
@@ -2024,7 +2024,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 125.49829995259643,
+      "latency_ms": 135.5687000323087,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2041,7 +2041,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #17: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #56: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610221124, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_checkout_03",
@@ -2051,7 +2051,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 126.92459998652339,
+      "latency_ms": 137.01770012266934,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2068,7 +2068,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #18: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #57: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610221124, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_checkout_04",
@@ -2078,7 +2078,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 127.90680001489818,
+      "latency_ms": 130.12129999697208,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2095,7 +2095,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, tests/test_checkout_payment.py, .gitlab-ci.yml. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, tests/test_checkout_payment.py, .gitlab-ci.yml.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #19: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): services/checkout/payment_gateway.py, tests/test_checkout_payment.py, .gitlab-ci.yml. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: services/checkout/payment_gateway.py, tests/test_checkout_payment.py, .gitlab-ci.yml.\n- Prepared action proposal(s): 34, 35. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #58: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610221124, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_checkout_05",
@@ -2105,7 +2105,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 129.1749000083655,
+      "latency_ms": 129.27619996480644,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2122,7 +2122,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #20: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/checkout-core:\n- Likely cause: Deployment timed out while waiting for checkout rollout readiness after payment timeout handling changed.\n- Failed job: deploy-production in stage deploy, pipeline #720010.\n- Evidence: payment_gateway_retry_timeout=15; Failure type: timeout\n- Next action: Tune the rollout wait boundary, verify readiness probes, and keep rollback steps ready.\n- Grounded recommendation (97% confidence): For showcase/checkout-core, the recommendation is grounded in 12 evidence item(s). Start with job 820010 in stage deploy, then compare it with pipeline 720010. Inspect repository file(s): .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, services/checkout/payment_gateway.py, services/checkout/auth.py.\n\nPrepared safe fix plan #59: Stabilize failing pipeline timeout for showcase/checkout-core. It targets branch panopticon/showcase-checkout-core-pipeline_timeout-20260610221124, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_01",
@@ -2132,7 +2132,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 126.7518000677228,
+      "latency_ms": 143.91979994252324,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2149,7 +2149,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): tests/test_invoice_contract.py, .gitlab-ci.yml, workers/billing/events.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: tests/test_invoice_contract.py, .gitlab-ci.yml, workers/billing/events.py.\n- Prepared action proposal(s): 36, 37. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #21: Add regression test scaffold for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-test_scaffold-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): tests/test_invoice_contract.py, .gitlab-ci.yml, workers/billing/events.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: tests/test_invoice_contract.py, .gitlab-ci.yml, workers/billing/events.py.\n- Prepared action proposal(s): 36, 37. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #60: Add regression test scaffold for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-test_scaffold-20260610221124, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_02",
@@ -2159,7 +2159,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 120.7269998267293,
+      "latency_ms": 128.88760003261268,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2176,7 +2176,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #22: Prepare generic source-code change for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-generic_code_change-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #61: Prepare generic source-code change for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-generic_code_change-20260610221124, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_03",
@@ -2186,7 +2186,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 123.16980003379285,
+      "latency_ms": 127.58149998262525,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2203,7 +2203,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #23: Stabilize failing pipeline timeout for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-pipeline_timeout-20260610082226, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #62: Stabilize failing pipeline timeout for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-pipeline_timeout-20260610221124, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_04",
@@ -2213,7 +2213,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 128.59530001878738,
+      "latency_ms": 133.27510003000498,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2230,7 +2230,7 @@
       "project_resolved": true,
       "prepared_action_count": 2,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): workers/billing/events.py, tests/test_invoice_contract.py, .gitlab-ci.yml. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: workers/billing/events.py, tests/test_invoice_contract.py, .gitlab-ci.yml.\n- Prepared action proposal(s): 36, 37. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #24: Prepare generic source-code change for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-generic_code_change-20260610082227, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): workers/billing/events.py, tests/test_invoice_contract.py, .gitlab-ci.yml. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: workers/billing/events.py, tests/test_invoice_contract.py, .gitlab-ci.yml.\n- Prepared action proposal(s): 36, 37. They require approval in the Actions page before execution.\n\nPrepared safe fix plan #63: Prepare generic source-code change for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-generic_code_change-20260610221125, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "fix_plan_billing_05",
@@ -2240,7 +2240,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 129.42059990018606,
+      "latency_ms": 127.09320010617375,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2257,7 +2257,7 @@
       "project_resolved": true,
       "prepared_action_count": 0,
       "prepared_fix_plan_count": 1,
-      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #25: Stabilize failing pipeline timeout for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-pipeline_timeout-20260610082227, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
+      "answer": "Pipeline analysis for showcase/billing-ledger:\n- Likely cause: Contract tests failed because invoice_total is missing from the billing event payload.\n- Failed job: contract-tests in stage test, pipeline #720020.\n- Evidence: FAILED tests/test_invoice_contract.py::test_invoice_event_contains_total; Failure type: test_failure\n- Next action: Fix the contract or test fixture, then rerun the focused contract test before merge.\n- Grounded recommendation (97% confidence): For showcase/billing-ledger, the recommendation is grounded in 12 evidence item(s). Start with job 820020 in stage test, then compare it with pipeline 720020. Inspect repository file(s): .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py. Require approval before sending Slack/GitLab actions or creating code changes.\n- Grounded next step: Inspect indexed file evidence: .gitlab-ci.yml, workers/billing/events.py, tests/test_invoice_contract.py.\n\nPrepared safe fix plan #64: Stabilize failing pipeline timeout for showcase/billing-ledger. It targets branch panopticon/showcase-billing-ledger-pipeline_timeout-20260610221125, includes 3 diff preview(s), and requires approval before any GitLab write.\nValidation to run before merge: python -m pytest."
     },
     {
       "id": "memory_checkout_01",
@@ -2267,7 +2267,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 32.549999887123704,
+      "latency_ms": 36.27620008774102,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2294,7 +2294,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 37.042299984022975,
+      "latency_ms": 33.921899972483516,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2321,7 +2321,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 34.59339984692633,
+      "latency_ms": 35.652599995955825,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2348,7 +2348,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 36.69729991815984,
+      "latency_ms": 39.3928000703454,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2375,7 +2375,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 37.13700012303889,
+      "latency_ms": 36.68639995157719,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2402,7 +2402,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 37.144500063732266,
+      "latency_ms": 37.03100001439452,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2429,7 +2429,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 34.012800082564354,
+      "latency_ms": 37.06529992632568,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2456,7 +2456,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 34.446500008925796,
+      "latency_ms": 36.7467999458313,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2483,7 +2483,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 35.37900000810623,
+      "latency_ms": 36.00590000860393,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2510,7 +2510,7 @@
       "expected_intent": "memory",
       "actual_intent": "memory",
       "passed": true,
-      "latency_ms": 32.581400126218796,
+      "latency_ms": 36.727300146594644,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2537,7 +2537,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 31.574400141835213,
+      "latency_ms": 36.11049987375736,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2564,7 +2564,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 30.668299878016114,
+      "latency_ms": 33.36860006675124,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2591,7 +2591,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 29.951700009405613,
+      "latency_ms": 38.754899986088276,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2618,7 +2618,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 29.337999876588583,
+      "latency_ms": 37.974700098857284,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2645,7 +2645,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 28.71739980764687,
+      "latency_ms": 36.92299989052117,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2672,7 +2672,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 33.311800099909306,
+      "latency_ms": 39.97549996711314,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2699,7 +2699,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 31.98059997521341,
+      "latency_ms": 41.54830006882548,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2726,7 +2726,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 32.19329984858632,
+      "latency_ms": 40.20429984666407,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2753,7 +2753,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 32.16740000061691,
+      "latency_ms": 42.84100001677871,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2780,7 +2780,7 @@
       "expected_intent": "actions",
       "actual_intent": "actions",
       "passed": true,
-      "latency_ms": 33.40219985693693,
+      "latency_ms": 39.75579980760813,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2807,7 +2807,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 29.490000102669,
+      "latency_ms": 37.87230001762509,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2834,7 +2834,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 27.421300066635013,
+      "latency_ms": 42.921500047668815,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2861,7 +2861,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 28.635700000450015,
+      "latency_ms": 40.6230001244694,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2888,7 +2888,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 29.55490001477301,
+      "latency_ms": 39.003799902275205,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2915,7 +2915,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 28.931499924510717,
+      "latency_ms": 40.164400124922395,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2942,7 +2942,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 33.215299947187304,
+      "latency_ms": 43.55289996601641,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2969,7 +2969,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 32.75869996286929,
+      "latency_ms": 40.138599928468466,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -2996,7 +2996,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 37.5798000022769,
+      "latency_ms": 38.35290018469095,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3023,7 +3023,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 31.567600090056658,
+      "latency_ms": 40.949600050225854,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3050,7 +3050,7 @@
       "expected_intent": "summary",
       "actual_intent": "summary",
       "passed": true,
-      "latency_ms": 31.548500061035156,
+      "latency_ms": 41.02560016326606,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3077,7 +3077,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 33.929700031876564,
+      "latency_ms": 44.875500025227666,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3104,7 +3104,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 31.95899981074035,
+      "latency_ms": 40.0819000788033,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3131,7 +3131,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 35.10500001721084,
+      "latency_ms": 41.31000000052154,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3158,7 +3158,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 30.989699997007847,
+      "latency_ms": 39.89070001989603,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3185,7 +3185,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 32.576699974015355,
+      "latency_ms": 40.82860006019473,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3212,7 +3212,7 @@
       "expected_intent": "pipeline_failure",
       "actual_intent": "pipeline_failure",
       "passed": true,
-      "latency_ms": 31.547300051897764,
+      "latency_ms": 42.26889996789396,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3239,7 +3239,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 30.831200070679188,
+      "latency_ms": 41.113900020718575,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3266,7 +3266,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 30.298100085929036,
+      "latency_ms": 41.38939990662038,
       "checks": {
         "intent": true,
         "project_resolved": true,
@@ -3293,7 +3293,7 @@
       "expected_intent": "risk",
       "actual_intent": "risk",
       "passed": true,
-      "latency_ms": 30.436099972575903,
+      "latency_ms": 39.01749989017844,
       "checks": {
         "intent": true,
         "project_resolved": true,

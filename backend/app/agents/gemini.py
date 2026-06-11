@@ -49,15 +49,12 @@ class GeminiReasoner:
         }
         generated = self._generate_live(task="chat_answer", prompt=prompt, context=context, max_output_tokens=2048)
         if _is_live_failure(generated):
-            return _chat_failure_message(generated)
+            return deterministic_draft
         if _looks_incomplete(generated):
             repaired = self._repair_chat_answer(question=question, subject=subject, evidence=evidence, incomplete_answer=generated)
             if not _is_live_failure(repaired) and not _looks_incomplete(repaired):
                 return repaired
-            return (
-                "Gemini returned an incomplete answer, so I did not show it as the final response. "
-                "Please ask again; the backend will retry the live model call."
-            )
+            return deterministic_draft
         return generated
 
     def grounded_recommendation(

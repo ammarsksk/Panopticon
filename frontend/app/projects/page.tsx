@@ -1,7 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { AlertCircle, ArrowLeft, ExternalLink, GitBranch, GitPullRequest, KeyRound, RefreshCw, Rows3 } from "lucide-react";
 import { API_BASE, getProjectsData, GitLabProject, OAuthIntegrationStatus, ProjectSyncRun } from "@/lib/api";
-import { redirectIfUnauthorized } from "../authRedirect";
+import { ProtectedClientPage } from "../ProtectedClientPage";
 import { SyncProjectsButton } from "./SyncProjectsButton";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
@@ -159,64 +161,62 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
-export default async function ProjectsPage() {
-  let data;
-  try {
-    data = await getProjectsData();
-  } catch (error) {
-    redirectIfUnauthorized(error);
-  }
-  const { projects, syncRuns, gitlabIntegration } = data;
-  const lastRun = syncRuns[0];
-
+export default function ProjectsPage() {
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
-          <div>
-            <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
-              <ArrowLeft size={16} />
-              Dashboard
-            </Link>
-            <h1 className="text-2xl font-semibold">GitLab Projects</h1>
-            <p className="mt-1 text-sm text-slate-600">Synced repositories, active merge requests, and recent pipeline state.</p>
-          </div>
-          <SyncProjectsButton />
-        </div>
-      </header>
+    <ProtectedClientPage load={getProjectsData} title="Opening projects">
+      {({ projects, syncRuns, gitlabIntegration }) => {
+        const lastRun = syncRuns[0];
+        return (
+          <main className="min-h-screen bg-slate-50 text-slate-950">
+            <header className="border-b border-slate-200 bg-white">
+              <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
+                <div>
+                  <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
+                    <ArrowLeft size={16} />
+                    Dashboard
+                  </Link>
+                  <h1 className="text-2xl font-semibold">GitLab Projects</h1>
+                  <p className="mt-1 text-sm text-slate-600">Synced repositories, active merge requests, and recent pipeline state.</p>
+                </div>
+                <SyncProjectsButton />
+              </div>
+            </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-6">
-        <GitLabIntegrationPanel integration={gitlabIntegration} />
+            <div className="mx-auto max-w-7xl px-6 py-6">
+              <GitLabIntegrationPanel integration={gitlabIntegration} />
 
-        {lastRun ? (
-          <section className="mb-6">
-            <div className="mb-3 text-xs font-semibold uppercase text-slate-500">Latest Sync</div>
-            <SyncRunCard run={lastRun} />
-          </section>
-        ) : null}
+              {lastRun ? (
+                <section className="mb-6">
+                  <div className="mb-3 text-xs font-semibold uppercase text-slate-500">Latest Sync</div>
+                  <SyncRunCard run={lastRun} />
+                </section>
+              ) : null}
 
-        <section>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-slate-950">Repositories</h2>
-            <div className="text-sm text-slate-500">{projects.length} project{projects.length === 1 ? "" : "s"}</div>
-          </div>
+              <section>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-slate-950">Repositories</h2>
+                  <div className="text-sm text-slate-500">{projects.length} project{projects.length === 1 ? "" : "s"}</div>
+                </div>
 
-          {projects.length ? (
-            <div className="grid gap-3 xl:grid-cols-2">
-              {projects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
-              ))}
+                {projects.length ? (
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {projects.map((project) => (
+                      <ProjectCard key={project.id} project={project} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-slate-300 bg-white p-6">
+                    <h3 className="font-semibold text-slate-950">No GitLab projects synced yet.</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Use the sync button after `GITLAB_TOKEN` is configured. Panopticon will load accessible projects, open merge requests, latest pipelines, and failed jobs.
+                    </p>
+                  </div>
+                )}
+              </section>
             </div>
-          ) : (
-            <div className="border border-dashed border-slate-300 bg-white p-6">
-              <h3 className="font-semibold text-slate-950">No GitLab projects synced yet.</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Use the sync button after `GITLAB_TOKEN` is configured. Panopticon will load accessible projects, open merge requests, latest pipelines, and failed jobs.
-              </p>
-            </div>
-          )}
-        </section>
-      </div>
-    </main>
+          </main>
+        );
+      }}
+    </ProtectedClientPage>
   );
 }

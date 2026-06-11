@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.agents.gemini import GeminiReasoner
+from app.services.agent_memory import is_stale_failure_memory
 
 
 class GroundedRecommendationEngine:
@@ -115,7 +116,10 @@ class GroundedRecommendationEngine:
             stmt = stmt.where(model.project_path == project_path)
         for filter_expr in filters:
             stmt = stmt.where(filter_expr)
-        return self.db.scalars(stmt.order_by(order_by).limit(limit)).all()
+        records = self.db.scalars(stmt.order_by(order_by).limit(limit)).all()
+        if model is models.MemoryRecord:
+            records = [record for record in records if not is_stale_failure_memory(record)]
+        return records
 
 
 def validate_recommendation(text: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:

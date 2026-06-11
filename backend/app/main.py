@@ -23,6 +23,7 @@ from app.services.agent_actions import AgentActionService
 from app.services.agent_tools import AgentToolService, mcp_text_result
 from app.services.auth import AuthService, RequestContext, assign_workspace, clear_session_cookie, get_current_context, require_role, set_session_cookie, workspace_filter
 from app.services.chat import ChatService
+from app.services.chat_validation import contains_failure_notice
 from app.services.fix_plans import FixPlanService
 from app.services.gitlab_sync import GitLabProjectSyncService
 from app.services.grounded_recommendations import GroundedRecommendationEngine
@@ -629,6 +630,39 @@ def list_memory(db: Session = Depends(get_db), context: RequestContext = Depends
     return [_shape_memory_record(record) for record in records]
 
 
+@app.patch("/api/memory/{memory_id}", response_model=schemas.MemoryRecordOut)
+def update_memory_record(
+    memory_id: int,
+    request: schemas.MemoryRecordUpdateIn,
+    db: Session = Depends(get_db),
+    context: RequestContext = Depends(require_role("owner", "admin")),
+):
+    record = db.get(models.MemoryRecord, memory_id)
+    if not record or record.workspace_id != context.workspace.id:
+        raise HTTPException(status_code=404, detail="Memory record not found")
+    updates = request.model_dump(exclude_unset=True)
+    for field in ("project_path", "memory_type", "signature", "summary"):
+        if field in updates and updates[field] is not None:
+            setattr(record, field, _string_value(updates[field]))
+    if "evidence" in updates and updates["evidence"] is not None:
+        record.evidence = _list_of_strings(updates["evidence"])
+    if "remediation" in updates and updates["remediation"] is not None:
+        record.remediation = _list_of_strings(updates["remediation"])
+    db.commit()
+    db.refresh(record)
+    return _shape_memory_record(record)
+
+
+@app.delete("/api/memory/{memory_id}", response_model=dict)
+def delete_memory_record(memory_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
+    record = db.get(models.MemoryRecord, memory_id)
+    if not record or record.workspace_id != context.workspace.id:
+        raise HTTPException(status_code=404, detail="Memory record not found")
+    db.delete(record)
+    db.commit()
+    return {"deleted": True, "id": memory_id}
+
+
 @app.get("/api/recommendations", response_model=list[schemas.RecommendationOut])
 def list_recommendations(
     db: Session = Depends(get_db),
@@ -841,7 +875,19 @@ def create_chat_message(request: schemas.ChatRequestIn, db: Session = Depends(ge
     if request.project_id and not db.scalar(select(models.GitLabProject).where(models.GitLabProject.id == request.project_id).where(workspace_filter(models.GitLabProject, context.workspace.id))):
         raise HTTPException(status_code=404, detail="Project not found")
     response = ChatService(db, workspace_id=context.workspace.id).answer(message=request.message, project_id=request.project_id, thread_id=request.thread_id)
-    return response
+    if isinstance(response, dict):
+        return {
+            **response,
+            "user_message": _shape_chat_message(response["user_message"]),
+            "assistant_message": _shape_chat_message(response["assistant_message"]),
+        }
+    return {
+        "thread": response.thread,
+        "user_message": _shape_chat_message(response.user_message),
+        "assistant_message": _shape_chat_message(response.assistant_message),
+        "prepared_actions": response.prepared_actions,
+        "prepared_fix_plans": response.prepared_fix_plans,
+    }
 
 
 @app.get("/api/chat/threads", response_model=list[schemas.ChatThreadOut])
@@ -854,17 +900,63 @@ def list_chat_threads(db: Session = Depends(get_db), context: RequestContext = D
     ).all()
 
 
+@app.delete("/api/chat/threads", response_model=schemas.ChatHistoryDeleteOut)
+def clear_chat_threads(db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
+    return _clear_chat_threads_for_workspace(db, context.workspace.id)
+
+
+@app.post("/api/chat/threads/clear", response_model=schemas.ChatHistoryDeleteOut)
+def clear_chat_threads_post(db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
+    return _clear_chat_threads_for_workspace(db, context.workspace.id)
+
+
+def _clear_chat_threads_for_workspace(db: Session, workspace_id: int) -> dict:
+    threads = db.scalars(select(models.ChatThread).where(workspace_filter(models.ChatThread, workspace_id))).all()
+    thread_ids = [thread.id for thread in threads]
+    messages: list[models.ChatMessage] = []
+    if thread_ids:
+        messages = db.scalars(
+            select(models.ChatMessage)
+            .where(models.ChatMessage.thread_id.in_(thread_ids))
+            .where(workspace_filter(models.ChatMessage, workspace_id))
+        ).all()
+    for message in messages:
+        db.delete(message)
+    for thread in threads:
+        db.delete(thread)
+    db.commit()
+    return {"deleted_threads": len(threads), "deleted_messages": len(messages)}
+
+
 @app.get("/api/chat/threads/{thread_id}", response_model=list[schemas.ChatMessageOut])
 def list_chat_messages(thread_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(get_current_context)):
     thread = db.get(models.ChatThread, thread_id)
     if not thread or thread.workspace_id != context.workspace.id:
         raise HTTPException(status_code=404, detail="Thread not found")
-    return db.scalars(
+    messages = db.scalars(
         select(models.ChatMessage)
         .where(models.ChatMessage.thread_id == thread_id)
         .where(workspace_filter(models.ChatMessage, context.workspace.id))
         .order_by(models.ChatMessage.created_at)
     ).all()
+    return [_shape_chat_message(message) for message in messages]
+
+
+@app.delete("/api/chat/threads/{thread_id}", response_model=schemas.ChatHistoryDeleteOut)
+def delete_chat_thread(thread_id: int, db: Session = Depends(get_db), context: RequestContext = Depends(require_role("owner", "admin"))):
+    thread = db.get(models.ChatThread, thread_id)
+    if not thread or thread.workspace_id != context.workspace.id:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    messages = db.scalars(
+        select(models.ChatMessage)
+        .where(models.ChatMessage.thread_id == thread_id)
+        .where(workspace_filter(models.ChatMessage, context.workspace.id))
+    ).all()
+    for message in messages:
+        db.delete(message)
+    db.delete(thread)
+    db.commit()
+    return {"deleted_threads": 1, "deleted_messages": len(messages)}
 
 
 @app.get("/api/integrations/slack")
@@ -1078,15 +1170,43 @@ def _shape_project_sync_run(record: models.ProjectSyncRun) -> dict:
 
 
 def _shape_memory_record(record: models.MemoryRecord) -> dict:
+    summary = _string_value(record.summary)
+    evidence = _list_of_strings(record.evidence)
+    remediation = _list_of_strings(record.remediation)
+    if contains_failure_notice(summary):
+        summary = (
+            "This stale incomplete Gemini memory was hidden. "
+            "Ask the question again and Panopticon will answer from current project context."
+        )
+    evidence = [item for item in evidence if not contains_failure_notice(item)]
+    remediation = [item for item in remediation if not contains_failure_notice(item)]
     return {
         "id": record.id,
         "project_path": _string_value(record.project_path),
         "memory_type": _string_value(record.memory_type, fallback="memory"),
         "signature": _string_value(record.signature),
-        "summary": _string_value(record.summary),
-        "evidence": _list_of_strings(record.evidence),
-        "remediation": _list_of_strings(record.remediation),
+        "summary": summary,
+        "evidence": evidence,
+        "remediation": remediation,
         "created_at": record.created_at or datetime.now(timezone.utc),
+    }
+
+
+def _shape_chat_message(message: models.ChatMessage) -> dict:
+    content = _string_value(message.content)
+    if _string_value(message.role) == "assistant" and contains_failure_notice(content):
+        content = (
+            "This older incomplete Gemini response was removed from the visible chat history. "
+            "Send the question again and Panopticon will answer from the current grounded project context."
+        )
+    return {
+        "id": message.id,
+        "thread_id": message.thread_id,
+        "role": _string_value(message.role, fallback="assistant"),
+        "content": content,
+        "citations": message.citations if isinstance(message.citations, list) else [],
+        "prepared_action_ids": message.prepared_action_ids if isinstance(message.prepared_action_ids, list) else [],
+        "created_at": message.created_at or datetime.now(timezone.utc),
     }
 
 

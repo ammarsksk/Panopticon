@@ -362,6 +362,15 @@ export type MemoryRecord = {
   created_at?: string;
 };
 
+export type MemoryRecordUpdate = {
+  project_path?: string;
+  memory_type?: string;
+  signature?: string;
+  summary?: string;
+  evidence?: string[];
+  remediation?: string[];
+};
+
 export type ActionDispatch = {
   id: number;
   recommendation_id: number | null;
@@ -417,6 +426,11 @@ export type ChatResponse = {
   assistant_message: ChatMessage;
   prepared_actions: AgentAction[];
   prepared_fix_plans: FixPlan[];
+};
+
+export type ChatHistoryDeleteResult = {
+  deleted_threads: number;
+  deleted_messages: number;
 };
 
 export type FixPlan = {
@@ -523,6 +537,33 @@ async function postJson<T>(path: string, body: Record<string, unknown> = {}, ini
     credentials: "include",
     headers: { ...initHeaders, "Content-Type": "application/json", ...(await forwardedHeaders()), ...(await csrfHeaders()) },
     body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    throw new ApiError(path, response.status);
+  }
+  return response.json();
+}
+
+async function patchJson<T>(path: string, body: Record<string, unknown> = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    cache: "no-store",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(await forwardedHeaders()), ...(await csrfHeaders()) },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    throw new ApiError(path, response.status);
+  }
+  return response.json();
+}
+
+async function deleteJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    cache: "no-store",
+    credentials: "include",
+    headers: { ...(await forwardedHeaders()), ...(await csrfHeaders()) }
   });
   if (!response.ok) {
     throw new ApiError(path, response.status);
@@ -657,6 +698,26 @@ export async function getChatThreads() {
 
 export async function getChatMessages(threadId: number) {
   return get<ChatMessage[]>(`/api/chat/threads/${threadId}`);
+}
+
+export async function clearChatHistory() {
+  return post<ChatHistoryDeleteResult>("/api/chat/threads/clear");
+}
+
+export async function deleteChatThread(threadId: number) {
+  return deleteJson<ChatHistoryDeleteResult>(`/api/chat/threads/${threadId}`);
+}
+
+export async function getMemoryRecords(limit = 100) {
+  return get<MemoryRecord[]>(`/api/memory?limit=${limit}`);
+}
+
+export async function updateMemoryRecord(memoryId: number, body: MemoryRecordUpdate) {
+  return patchJson<MemoryRecord>(`/api/memory/${memoryId}`, body);
+}
+
+export async function deleteMemoryRecord(memoryId: number) {
+  return deleteJson<{ deleted: boolean; id: number }>(`/api/memory/${memoryId}`);
 }
 
 export async function getAiIntegrationStatus() {

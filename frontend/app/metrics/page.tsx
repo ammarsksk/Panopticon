@@ -1,7 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { Activity, ArrowLeft, BarChart3, CircleDot, GitPullRequest, ShieldAlert, TrendingUp } from "lucide-react";
 import { getMetricsData, MetricSnapshot, ProjectHealth } from "@/lib/api";
-import { redirectIfUnauthorized } from "../authRedirect";
+import { ProtectedClientPage } from "../ProtectedClientPage";
 import { RefreshMetricsButton } from "./RefreshMetricsButton";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
@@ -111,43 +113,38 @@ function SnapshotList({ snapshots }: { snapshots: MetricSnapshot[] }) {
   );
 }
 
-export default async function MetricsPage() {
-  let data;
-  try {
-    data = await getMetricsData();
-  } catch (error) {
-    redirectIfUnauthorized(error);
-  }
-  const { summary, projects, snapshots } = data;
-  const atRisk = summary.projects_at_risk;
-  const failedRate = formatPercent(summary.failed_pipeline_rate);
-
+export default function MetricsPage() {
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
-          <div>
-            <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
-              <ArrowLeft size={16} />
-              Dashboard
-            </Link>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="text-teal-700" size={24} />
-              <h1 className="text-2xl font-semibold">Engineering Health Metrics</h1>
-            </div>
-            <p className="mt-1 text-sm text-slate-600">Project health derived from GitLab delivery state, agent actions, incidents, and observability signals.</p>
-          </div>
-          <RefreshMetricsButton />
-        </div>
-      </header>
+    <ProtectedClientPage load={getMetricsData} title="Opening metrics">
+      {({ summary, projects, snapshots }) => {
+        const atRisk = summary.projects_at_risk;
+        const failedRate = formatPercent(summary.failed_pipeline_rate);
+        return (
+          <main className="min-h-screen bg-slate-50 text-slate-950">
+            <header className="border-b border-slate-200 bg-white">
+              <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
+                <div>
+                  <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
+                    <ArrowLeft size={16} />
+                    Dashboard
+                  </Link>
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="text-teal-700" size={24} />
+                    <h1 className="text-2xl font-semibold">Engineering Health Metrics</h1>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">Project health derived from GitLab delivery state, agent actions, incidents, and observability signals.</p>
+                </div>
+                <RefreshMetricsButton />
+              </div>
+            </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-6">
-        <div className="grid gap-3 md:grid-cols-4">
-          <Metric label="Average Health" value={`${summary.average_health_score}/100`} detail={summary.health_level} tone={healthTone(summary.health_level)} />
-          <Metric label="Failed Pipeline Rate" value={failedRate} detail={`${summary.failed_pipelines}/${summary.total_pipelines} pipelines`} tone={summary.failed_pipeline_rate ? "warn" : "good"} />
-          <Metric label="Projects At Risk" value={atRisk} detail={`${summary.project_count} total projects`} tone={atRisk ? "critical" : "good"} />
-          <Metric label="Open Symptoms" value={summary.open_incidents + summary.observability_alerts} detail="incidents + alerts" tone={summary.open_incidents || summary.observability_alerts ? "critical" : "good"} />
-        </div>
+            <div className="mx-auto max-w-7xl px-6 py-6">
+              <div className="grid gap-3 md:grid-cols-4">
+                <Metric label="Average Health" value={`${summary.average_health_score}/100`} detail={summary.health_level} tone={healthTone(summary.health_level)} />
+                <Metric label="Failed Pipeline Rate" value={failedRate} detail={`${summary.failed_pipelines}/${summary.total_pipelines} pipelines`} tone={summary.failed_pipeline_rate ? "warn" : "good"} />
+                <Metric label="Projects At Risk" value={atRisk} detail={`${summary.project_count} total projects`} tone={atRisk ? "critical" : "good"} />
+                <Metric label="Open Symptoms" value={summary.open_incidents + summary.observability_alerts} detail="incidents + alerts" tone={summary.open_incidents || summary.observability_alerts ? "critical" : "good"} />
+              </div>
 
         <section className="border-t border-slate-200 py-6">
           <div className="mb-4 flex items-center gap-2">
@@ -233,7 +230,10 @@ export default async function MetricsPage() {
             ))}
           </div>
         </section>
-      </div>
-    </main>
+            </div>
+          </main>
+        );
+      }}
+    </ProtectedClientPage>
   );
 }

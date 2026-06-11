@@ -20,6 +20,7 @@ const FIX_TYPES = [
   { value: "source_validation", label: "Source validation" },
   { value: "source_logging", label: "Source logging" },
   { value: "source_bug_fix", label: "Source bug fix" },
+  { value: "multi_file_bug_fix", label: "Multi-file bug fix" },
   { value: "documentation_update", label: "Documentation update" },
   { value: "config_validation", label: "Config validation" },
   { value: "generic_code_change", label: "Generic code change" }

@@ -1,13 +1,13 @@
-import { getDashboardData } from "@/lib/api";
-import { redirectIfUnauthorized } from "../authRedirect";
-import { DashboardExperience } from "../DashboardExperience";
+"use client";
 
-export default async function DashboardPage() {
-  let data;
-  try {
-    data = await getDashboardData();
-  } catch (error) {
-    redirectIfUnauthorized(error);
-  }
-  return <DashboardExperience data={data} />;
+import { DashboardExperience } from "../DashboardExperience";
+import { ProtectedClientPage } from "../ProtectedClientPage";
+import { getDashboardData } from "@/lib/api";
+
+export default function DashboardPage() {
+  return (
+    <ProtectedClientPage load={getDashboardData} title="Opening dashboard">
+      {(data) => <DashboardExperience data={data} />}
+    </ProtectedClientPage>
+  );
 }

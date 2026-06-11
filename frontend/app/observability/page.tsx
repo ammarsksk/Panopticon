@@ -1,7 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowLeft, Gauge, RadioTower } from "lucide-react";
 import { getObservabilityData, IncidentCorrelation, ObservabilityEvent } from "@/lib/api";
-import { redirectIfUnauthorized } from "../authRedirect";
+import { ProtectedClientPage } from "../ProtectedClientPage";
 
 function Badge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "critical" }) {
   const styles = {
@@ -119,43 +121,38 @@ function EventCard({ event }: { event: ObservabilityEvent }) {
   );
 }
 
-export default async function ObservabilityPage() {
-  let data;
-  try {
-    data = await getObservabilityData();
-  } catch (error) {
-    redirectIfUnauthorized(error);
-  }
-  const { events, correlations, projects } = data;
-  const critical = correlations.filter((item) => ["critical", "high"].includes(item.severity)).length;
-  const unmapped = events.filter((item) => !item.project_path).length;
-
+export default function ObservabilityPage() {
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
-          <div>
-            <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
-              <ArrowLeft size={16} />
-              Dashboard
-            </Link>
-            <div className="flex items-center gap-2">
-              <RadioTower className="text-teal-700" size={24} />
-              <h1 className="text-2xl font-semibold">Observability Correlation</h1>
-            </div>
-            <p className="mt-1 text-sm text-slate-600">Production alerts correlated with GitLab pipelines, jobs, delivery risks, and incidents.</p>
-          </div>
-          <div className="text-sm text-slate-600">{projects.length} synced project{projects.length === 1 ? "" : "s"}</div>
-        </div>
-      </header>
+    <ProtectedClientPage load={getObservabilityData} title="Opening observability">
+      {({ events, correlations, projects }) => {
+        const critical = correlations.filter((item) => ["critical", "high"].includes(item.severity)).length;
+        const unmapped = events.filter((item) => !item.project_path).length;
+        return (
+          <main className="min-h-screen bg-slate-50 text-slate-950">
+            <header className="border-b border-slate-200 bg-white">
+              <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
+                <div>
+                  <Link href="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-teal-700">
+                    <ArrowLeft size={16} />
+                    Dashboard
+                  </Link>
+                  <div className="flex items-center gap-2">
+                    <RadioTower className="text-teal-700" size={24} />
+                    <h1 className="text-2xl font-semibold">Observability Correlation</h1>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">Production alerts correlated with GitLab pipelines, jobs, delivery risks, and incidents.</p>
+                </div>
+                <div className="text-sm text-slate-600">{projects.length} synced project{projects.length === 1 ? "" : "s"}</div>
+              </div>
+            </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-6">
-        <div className="grid gap-3 md:grid-cols-4">
-          <Metric label="Observability events" value={events.length} />
-          <Metric label="Correlations" value={correlations.length} />
-          <Metric label="Critical or high" value={critical} tone={critical ? "critical" : "neutral"} />
-          <Metric label="Unmapped services" value={unmapped} tone={unmapped ? "warn" : "neutral"} />
-        </div>
+            <div className="mx-auto max-w-7xl px-6 py-6">
+              <div className="grid gap-3 md:grid-cols-4">
+                <Metric label="Observability events" value={events.length} />
+                <Metric label="Correlations" value={correlations.length} />
+                <Metric label="Critical or high" value={critical} tone={critical ? "critical" : "neutral"} />
+                <Metric label="Unmapped services" value={unmapped} tone={unmapped ? "warn" : "neutral"} />
+              </div>
 
         <section className="border-t border-slate-200 py-6">
           <div className="mb-4 flex items-center gap-2">
@@ -211,7 +208,10 @@ export default async function ObservabilityPage() {
 }`}
           </pre>
         </section>
-      </div>
-    </main>
+            </div>
+          </main>
+        );
+      }}
+    </ProtectedClientPage>
   );
 }

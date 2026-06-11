@@ -88,6 +88,32 @@ def _seed(db):
             RepoFileIndex(
                 project_id=project.id,
                 project_path="demo/checkout-service",
+                file_path="services/inventory/reservations.py",
+                ref="main",
+                file_type="source",
+                language="python",
+                size_bytes=90,
+                content_sha="sha-inventory",
+                last_commit_id="abc123",
+                content_excerpt="def reserve_stock(available, requested):\n    return available - requested\n",
+                signals={"risk_flags": ["inventory", "stock"]},
+            ),
+            RepoFileIndex(
+                project_id=project.id,
+                project_path="demo/checkout-service",
+                file_path="services/shipping/estimate.py",
+                ref="main",
+                file_type="source",
+                language="python",
+                size_bytes=120,
+                content_sha="sha-shipping",
+                last_commit_id="abc123",
+                content_excerpt="def estimate_delivery_days(country, expedited=False):\n    if expedited:\n        return 2\n    return 5\n",
+                signals={"risk_flags": ["shipping", "delivery"]},
+            ),
+            RepoFileIndex(
+                project_id=project.id,
+                project_path="demo/checkout-service",
                 file_path="README.md",
                 ref="main",
                 file_type="docs",
@@ -343,6 +369,25 @@ def test_fix_plan_creates_real_source_bug_fix_diff_from_indexed_code():
     assert "-        return total - 10" in diff
     assert "+        return round(total * 0.90, 2)" in diff
     assert plan.fix_type == "source_bug_fix"
+
+
+def test_fix_plan_creates_multi_file_source_bug_fix_diffs():
+    db = _session()
+    project, _pipeline = _seed(db)
+
+    plan = FixPlanService(db).create(
+        project_id=project.id,
+        problem_statement="Fix all failing tests: discount coupon, inventory reservation, and shipping estimate bugs.",
+        fix_type="multi_file_bug_fix",
+    )
+
+    files = {item["path"]: item["content"] for item in plan.plan_payload["files"]}
+    assert "services/discounts/discounts.py" in files
+    assert "services/inventory/reservations.py" in files
+    assert "services/shipping/estimate.py" in files
+    assert "return round(total * 0.90, 2)" in files["services/discounts/discounts.py"]
+    assert "requested quantity exceeds available stock" in files["services/inventory/reservations.py"]
+    assert "return 1 if expedited else 3" in files["services/shipping/estimate.py"]
 
 
 def test_fix_plan_creates_docs_and_config_code_change_diffs():

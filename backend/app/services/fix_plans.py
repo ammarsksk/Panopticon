@@ -24,6 +24,7 @@ SAFE_FIX_TYPES = {
     "source_validation",
     "source_logging",
     "source_bug_fix",
+    "multi_file_bug_fix",
     "documentation_update",
     "config_validation",
     "generic_code_change",
@@ -555,6 +556,24 @@ def _repo_patch_files(
                     "content": _test_scaffold_content(project, source),
                 }
             ]
+    if fix_type == "multi_file_bug_fix":
+        selected_sources = _rank_sources_for_problem(repo_files, problem_statement)[:8]
+        files = []
+        for source in selected_sources:
+            suggestion = _draft_patch_suggestion(source.content_excerpt, file_path=source.file_path, instructions=problem_statement or "fix all failing source-code bugs")
+            proposed = str(suggestion.get("proposed_content") or source.content_excerpt)
+            if proposed.rstrip() == source.content_excerpt.rstrip():
+                continue
+            files.append(
+                {
+                    "path": source.file_path,
+                    "commit_action": "update",
+                    "purpose": "Apply one part of the multi-file source-code repair requested through the agent.",
+                    "content": proposed,
+                }
+            )
+        if files:
+            return files
     if fix_type in {"source_validation", "source_logging", "source_bug_fix", "generic_code_change"}:
         source = _find_source_for_problem(repo_files, problem_statement) or _find_first_type(repo_files, "source")
         if source:
@@ -619,12 +638,17 @@ def _find_first_type(repo_files: list[models.RepoFileIndex], file_type: str) -> 
 
 
 def _find_source_for_problem(repo_files: list[models.RepoFileIndex], problem_statement: str) -> models.RepoFileIndex | None:
+    ranked = _rank_sources_for_problem(repo_files, problem_statement)
+    return ranked[0] if ranked else None
+
+
+def _rank_sources_for_problem(repo_files: list[models.RepoFileIndex], problem_statement: str) -> list[models.RepoFileIndex]:
     source_files = [item for item in repo_files if item.file_type == "source"]
     if not source_files:
-        return None
+        return []
     terms = {term for term in re.findall(r"[a-zA-Z0-9_]{3,}", problem_statement.lower()) if term not in {"the", "and", "for", "with", "from", "this", "that", "code", "change", "fix"}}
     if not terms:
-        return source_files[0]
+        return source_files
 
     def score(item: models.RepoFileIndex) -> tuple[int, int]:
         haystack = f"{item.file_path}\n{item.content_excerpt}".lower()
@@ -632,8 +656,7 @@ def _find_source_for_problem(repo_files: list[models.RepoFileIndex], problem_sta
         path_hits = sum(1 for term in terms if term in item.file_path.lower())
         return (direct_hits + path_hits * 2, -len(item.file_path))
 
-    scored = sorted(source_files, key=score, reverse=True)
-    return scored[0] if score(scored[0])[0] > 0 else source_files[0]
+    return sorted(source_files, key=score, reverse=True)
 
 
 def _patch_ci_timeout(content: str) -> str:
@@ -873,6 +896,8 @@ def _fix_type(requested: str, source, problem_statement: str) -> str:
     text = f"{problem_statement} {_summary(source, '')}".lower()
     if "timeout" in text or "timed out" in text:
         return "pipeline_timeout"
+    if "all failing" in text or "multiple error" in text or "multiple bug" in text or "all errors" in text or "all bugs" in text:
+        return "multi_file_bug_fix"
     if "bug" in text or "failing test" in text or "wrong result" in text or "discount" in text or "coupon" in text:
         return "source_bug_fix"
     if "test" in text or "coverage" in text:
@@ -901,7 +926,7 @@ def _intent_for_fix_type(fix_type: str) -> str:
         return "risk"
     if fix_type == "test_scaffold":
         return "risk"
-    if fix_type in {"source_validation", "source_logging", "source_bug_fix", "documentation_update", "config_validation", "generic_code_change"}:
+    if fix_type in {"source_validation", "source_logging", "source_bug_fix", "multi_file_bug_fix", "documentation_update", "config_validation", "generic_code_change"}:
         return "summary"
     return "summary"
 
@@ -916,6 +941,7 @@ def _title(fix_type: str, project_path: str) -> str:
         "source_validation": "Add source-code validation guard",
         "source_logging": "Add source-code diagnostic logging",
         "source_bug_fix": "Fix source-code bug",
+        "multi_file_bug_fix": "Fix multiple source-code bugs",
         "documentation_update": "Update project documentation",
         "config_validation": "Add configuration validation guidance",
         "generic_code_change": "Prepare generic source-code change",
